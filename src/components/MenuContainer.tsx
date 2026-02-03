@@ -109,10 +109,13 @@ export default function MenuContainer() {
         if (!confirm("⚠️ WARNING: This will DELETE ALL recipes from the database. This cannot be undone. Are you sure?")) return;
 
         setLoading(true);
-        const { error } = await supabase.from("recipes").delete().neq("id", "00000000-0000-0000-0000-000000000000"); // Delete all
+        // "select" option is needed to return the count of deleted rows
+        const { error, count } = await supabase.from("recipes").delete({ count: 'exact' }).neq("id", "00000000-0000-0000-0000-000000000000");
 
         if (error) {
-            alert(`Error resetting: ${error.message}`);
+            alert(`Error resetting: ${error.message}. Check your Supabase Policies!`);
+        } else if (count !== null && count === 0 && recipes.length > 0) {
+            alert("Warning: 0 recipes were deleted. This usually means Supabase is blocking the DELETE action. Please run the SQL command to enable 'delete' policies.");
         } else {
             alert("Menu cleared! You can now reload the initial data.");
             setRecipes([]);
