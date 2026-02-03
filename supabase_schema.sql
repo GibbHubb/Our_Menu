@@ -24,6 +24,14 @@ create policy "Enable insert access for all users"
 on public.recipes for insert
 with check (true);
 
+create policy "Enable delete access for all users"
+on public.recipes for delete
+using (true);
+
+create policy "Enable update access for all users"
+on public.recipes for update
+using (true);
+
 -- Optional: Storage bucket for images if needed later
 -- insert into storage.buckets (id, name) values ('images', 'images');
 -- create policy "Public Access" on storage.objects for select using ( bucket_id = 'images' );
