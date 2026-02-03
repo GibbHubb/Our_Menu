@@ -7,10 +7,11 @@ interface MasonryGridProps {
     recipes: Recipe[];
     onSeed?: () => void;
     onReset?: () => void;
+    onEdit?: (recipe: Recipe) => void;
     error?: string | null;
 }
 
-export default function MasonryGrid({ recipes, onSeed, onReset, error }: MasonryGridProps) {
+export default function MasonryGrid({ recipes, onSeed, onReset, onEdit, error }: MasonryGridProps) {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
@@ -67,7 +68,7 @@ export default function MasonryGrid({ recipes, onSeed, onReset, error }: Masonry
             <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 px-4 pb-20 space-y-4">
                 <AnimatePresence>
                     {recipes.map((recipe) => (
-                        <RecipeCard key={recipe.id} recipe={recipe} />
+                        <RecipeCard key={recipe.id} recipe={recipe} onEdit={onEdit} />
                     ))}
                 </AnimatePresence>
             </div>

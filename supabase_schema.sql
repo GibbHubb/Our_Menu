@@ -5,7 +5,10 @@ create table public.recipes (
   title text not null,
   category text not null, -- 'Want to Cook', 'Mains', 'Soup', 'Snacks', 'Breakfast', 'Sweets'
   link text,
-  image_url text
+  image_url text,
+  ingredients text, -- New: Store ingredients list
+  instructions text, -- New: Store cooking steps
+  notes text -- New: Chef's notes
 );
 
 -- Set up Row Level Security (RLS)

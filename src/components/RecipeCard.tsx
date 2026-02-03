@@ -1,13 +1,14 @@
 import React, { useState } from "react";
 import { Recipe } from "@/lib/types";
-import { Link2 } from "lucide-react";
+import { Link2, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface RecipeCardProps {
     recipe: Recipe;
+    onEdit?: (recipe: Recipe) => void;
 }
 
-export default function RecipeCard({ recipe }: RecipeCardProps) {
+export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
     // Simple deterministic color seed based on category for placeholder
     const getCategoryColor = (cat: string) => {
         switch (cat) {
@@ -62,12 +63,28 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
                     </span>
                 </div>
 
-                {/* Link Indicator */}
-                {recipe.link && (
-                    <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Link2 className="w-3 h-3 text-stone-900" />
-                    </div>
-                )}
+                <div className="absolute top-3 right-3 flex gap-2">
+                    {/* Edit Button */}
+                    {onEdit && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onEdit(recipe);
+                            }}
+                            className="bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white hover:text-amber-600"
+                            title="Edit Recipe"
+                        >
+                            <Pencil className="w-3 h-3" />
+                        </button>
+                    )}
+
+                    {/* Link Indicator */}
+                    {recipe.link && (
+                        <div className="bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Link2 className="w-3 h-3 text-stone-900" />
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Content */}

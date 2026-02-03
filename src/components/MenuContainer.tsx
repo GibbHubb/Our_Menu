@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import Header from "./Header";
 import MasonryGrid from "./MasonryGrid";
 import AddRecipeModal from "./AddRecipeModal";
+import EditRecipeModal from "./EditRecipeModal";
 import DecisionMaker from "./DecisionMaker";
 import { Plus, Wand2, Database } from "lucide-react";
 import { INITIAL_RECIPES } from "@/lib/initialData";
@@ -29,6 +30,10 @@ export default function MenuContainer() {
     // Modals
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isDecisionOpen, setIsDecisionOpen] = useState(false);
+
+    // Editing
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
 
     // Fetch Recipes
     const fetchRecipes = async () => {
@@ -72,6 +77,22 @@ export default function MenuContainer() {
         if (data) {
             setRecipes((prev) => [data[0] as Recipe, ...prev]);
         }
+    };
+
+    // Update Recipe Handler
+    const handleUpdateRecipe = async (updated: Recipe) => {
+        const { error } = await supabase.from("recipes").update(updated).eq("id", updated.id);
+        if (error) {
+            alert("Error updating recipe! " + error.message);
+            return;
+        }
+
+        setRecipes((prev) => prev.map(r => r.id === updated.id ? updated : r));
+    };
+
+    const handleOpenEdit = (recipe: Recipe) => {
+        setEditingRecipe(recipe);
+        setIsEditOpen(true);
     };
 
     // Seed Data Handler (Dev/Setup usage)
@@ -143,6 +164,7 @@ export default function MenuContainer() {
                         recipes={filteredRecipes}
                         onSeed={handleSeedData}
                         onReset={handleResetData}
+                        onEdit={handleOpenEdit}
                         error={error}
                     />
                 )}
@@ -171,6 +193,14 @@ export default function MenuContainer() {
                 isOpen={isAddOpen}
                 onClose={() => setIsAddOpen(false)}
                 onAdd={handleAddRecipe}
+                categories={CATEGORIES}
+            />
+
+            <EditRecipeModal
+                isOpen={isEditOpen}
+                onClose={() => setIsEditOpen(false)}
+                onUpdate={handleUpdateRecipe}
+                recipe={editingRecipe}
                 categories={CATEGORIES}
             />
 
