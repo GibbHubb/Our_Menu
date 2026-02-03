@@ -22,6 +22,7 @@ const CATEGORIES: Category[] = [
 export default function MenuContainer() {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<Category | "All">("All");
     const [searchTerm, setSearchTerm] = useState("");
 
@@ -32,6 +33,7 @@ export default function MenuContainer() {
     // Fetch Recipes
     const fetchRecipes = async () => {
         setLoading(true);
+        setError(null);
         const { data, error } = await supabase
             .from("recipes")
             .select("*")
@@ -39,6 +41,7 @@ export default function MenuContainer() {
 
         if (error) {
             console.error("Error fetching recipes:", error);
+            setError(error.message);
         } else {
             setRecipes(data as Recipe[]);
         }
@@ -63,8 +66,7 @@ export default function MenuContainer() {
     const handleAddRecipe = async (newRecipe: any) => {
         const { data, error } = await supabase.from("recipes").insert([newRecipe]).select();
         if (error) {
-            alert("Error adding recipe! Check console.");
-            console.error(error);
+            alert("Error adding recipe! " + error.message);
             throw error;
         }
         if (data) {
@@ -76,13 +78,25 @@ export default function MenuContainer() {
     const handleSeedData = async () => {
         if (!confirm("This will upload all initial recipes to the database. Continue?")) return;
 
+        setLoading(true);
         // Upload in batches to be safe, or just loop
         let count = 0;
+        let lastError = null;
         for (const r of INITIAL_RECIPES) {
             const { error } = await supabase.from("recipes").insert([r]);
-            if (!error) count++;
+            if (!error) {
+                count++;
+            } else {
+                console.error("Seed error:", error);
+                lastError = error;
+            }
         }
-        alert(`Seeded ${count} recipes!`);
+
+        if (count === 0 && lastError) {
+            alert(`Failed to seed recipes. Error: ${lastError.message || JSON.stringify(lastError)}`);
+        } else {
+            alert(`Seeded ${count} recipes!`);
+        }
         fetchRecipes();
     };
 
@@ -102,23 +116,16 @@ export default function MenuContainer() {
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-stone-900"></div>
                     </div>
                 ) : (
-                    <MasonryGrid recipes={filteredRecipes} />
+                    <MasonryGrid
+                        recipes={filteredRecipes}
+                        onSeed={handleSeedData}
+                        error={error}
+                    />
                 )}
             </main>
 
             {/* Floating Action Buttons */}
             <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-40">
-                {/* Helper for seeding data if empty */}
-                {recipes.length === 0 && !loading && (
-                    <button
-                        onClick={handleSeedData}
-                        className="p-4 bg-stone-200 text-stone-600 rounded-full shadow-lg hover:bg-stone-300 transition-transform hover:scale-105"
-                        title="Seed Initial Data"
-                    >
-                        <Database className="w-6 h-6" />
-                    </button>
-                )}
-
                 <button
                     onClick={() => setIsDecisionOpen(true)}
                     className="p-4 bg-white text-amber-600 rounded-full shadow-lg hover:bg-amber-50 transition-transform hover:scale-105 border border-amber-100"
