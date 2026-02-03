@@ -19,6 +19,12 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
         }
     };
 
+    const handleClick = () => {
+        if (recipe.link) {
+            window.open(recipe.link, "_blank", "noopener,noreferrer");
+        }
+    };
+
     return (
         <motion.div
             layout
@@ -26,7 +32,8 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
             transition={{ duration: 0.2 }}
-            className="group relative bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-stone-100 flex flex-col break-inside-avoid mb-4"
+            onClick={handleClick}
+            className={`group relative bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all border border-stone-100 flex flex-col break-inside-avoid mb-4 ${recipe.link ? 'cursor-pointer' : ''}`}
         >
             {/* Image Area */}
             <div className="aspect-[4/3] bg-stone-100 relative overflow-hidden">
@@ -34,7 +41,7 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
                     <img
                         src={recipe.image_url}
                         alt={recipe.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                         loading="lazy"
                     />
                 ) : (
@@ -49,6 +56,13 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
                         {recipe.category}
                     </span>
                 </div>
+
+                {/* Link Indicator */}
+                {recipe.link && (
+                    <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Link2 className="w-3 h-3 text-stone-900" />
+                    </div>
+                )}
             </div>
 
             {/* Content */}
@@ -56,19 +70,6 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
                 <h3 className="font-serif text-lg leading-tight text-stone-900 group-hover:text-amber-700 transition-colors">
                     {recipe.title}
                 </h3>
-
-                {recipe.link && (
-                    <a
-                        href={recipe.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 text-xs font-medium text-stone-500 hover:text-stone-900 flex items-center gap-1 w-max"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <Link2 className="w-3 h-3" />
-                        View Recipe
-                    </a>
-                )}
             </div>
         </motion.div>
     );
