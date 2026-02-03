@@ -1,6 +1,6 @@
 import { Recipe } from "./types";
 
-const getImg = (query: string) => `https://image.pollinations.ai/prompt/delicious%20${encodeURIComponent(query)}%20plated%20meal%20professional%20food%20photography%20lighting?nologo=true&width=800&height=600&seed=${Math.floor(Math.random() * 1000)}`;
+const getImg = (title: string) => `https://image.pollinations.ai/prompt/delicious%20${encodeURIComponent(title)}%20food%20photography?width=800&height=600&nologo=true`;
 
 export const INITIAL_RECIPES: Partial<Recipe>[] = [
     // WANT TO COOK

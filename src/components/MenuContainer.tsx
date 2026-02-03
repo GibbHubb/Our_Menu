@@ -76,27 +76,31 @@ export default function MenuContainer() {
 
     // Seed Data Handler (Dev/Setup usage)
     const handleSeedData = async () => {
-        if (!confirm("This will upload all initial recipes to the database. Continue?")) return;
+        if (!confirm("This will upload all initial recipes. Duplicates will be skipped. Continue?")) return;
 
         setLoading(true);
-        // Upload in batches to be safe, or just loop
         let count = 0;
-        let lastError = null;
+        let skipCount = 0;
+
+        // Get existing titles to prevent duplicates
+        const { data: existing } = await supabase.from("recipes").select("title");
+        const existingTitles = new Set(existing?.map(r => r.title.toLowerCase()) || []);
+
         for (const r of INITIAL_RECIPES) {
+            if (r.title && existingTitles.has(r.title.toLowerCase())) {
+                skipCount++;
+                continue;
+            }
+
             const { error } = await supabase.from("recipes").insert([r]);
             if (!error) {
                 count++;
             } else {
                 console.error("Seed error:", error);
-                lastError = error;
             }
         }
 
-        if (count === 0 && lastError) {
-            alert(`Failed to seed recipes. Error: ${lastError.message || JSON.stringify(lastError)}`);
-        } else {
-            alert(`Seeded ${count} recipes!`);
-        }
+        alert(`Finished! Added ${count} new recipes. Skipped ${skipCount} already in menu.`);
         fetchRecipes();
     };
 
