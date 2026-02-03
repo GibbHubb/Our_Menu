@@ -1,15 +1,16 @@
 import { Recipe } from "@/lib/types";
 import RecipeCard from "./RecipeCard";
 import { motion, AnimatePresence } from "framer-motion";
-import { Database, AlertCircle } from "lucide-react";
+import { Database, AlertCircle, Trash2 } from "lucide-react";
 
 interface MasonryGridProps {
     recipes: Recipe[];
     onSeed?: () => void;
+    onReset?: () => void;
     error?: string | null;
 }
 
-export default function MasonryGrid({ recipes, onSeed, error }: MasonryGridProps) {
+export default function MasonryGrid({ recipes, onSeed, onReset, error }: MasonryGridProps) {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
@@ -37,26 +38,40 @@ export default function MasonryGrid({ recipes, onSeed, error }: MasonryGridProps
                     Your menu is currently empty. Would you like to load the initial list of Max & Bron's favorites?
                 </p>
 
-                {onSeed && (
-                    <button
-                        onClick={onSeed}
-                        className="px-8 py-3 bg-stone-900 text-white rounded-full font-medium hover:bg-stone-800 transition-transform active:scale-95 flex items-center gap-2 shadow-lg"
-                    >
-                        <Database className="w-4 h-4" />
-                        Load Initial Menu
-                    </button>
-                )}
+                <div className="flex gap-4">
+                    {onSeed && (
+                        <button
+                            onClick={onSeed}
+                            className="px-8 py-3 bg-stone-900 text-white rounded-full font-medium hover:bg-stone-800 transition-transform active:scale-95 flex items-center gap-2 shadow-lg"
+                        >
+                            <Database className="w-4 h-4" />
+                            Load Initial Menu
+                        </button>
+                    )}
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 px-4 pb-20 space-y-4">
-            <AnimatePresence>
-                {recipes.map((recipe) => (
-                    <RecipeCard key={recipe.id} recipe={recipe} />
-                ))}
-            </AnimatePresence>
+        <div>
+            <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 px-4 pb-20 space-y-4">
+                <AnimatePresence>
+                    {recipes.map((recipe) => (
+                        <RecipeCard key={recipe.id} recipe={recipe} />
+                    ))}
+                </AnimatePresence>
+            </div>
+
+            {/* Footer / Reset Area */}
+            <div className="flex justify-center pb-12 pt-4 opacity-30 hover:opacity-100 transition-opacity">
+                {onReset && (
+                    <button onClick={onReset} className="flex items-center gap-2 text-xs text-red-500 hover:text-red-700 bg-red-50 px-3 py-1 rounded-full">
+                        <Trash2 className="w-3 h-3" />
+                        Reset Database (Delete All)
+                    </button>
+                )}
+            </div>
         </div>
     );
 }

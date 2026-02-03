@@ -100,6 +100,22 @@ export default function MenuContainer() {
         fetchRecipes();
     };
 
+    // Reset Data Handler
+    const handleResetData = async () => {
+        if (!confirm("⚠️ WARNING: This will DELETE ALL recipes from the database. This cannot be undone. Are you sure?")) return;
+
+        setLoading(true);
+        const { error } = await supabase.from("recipes").delete().neq("id", "00000000-0000-0000-0000-000000000000"); // Delete all
+
+        if (error) {
+            alert(`Error resetting: ${error.message}`);
+        } else {
+            alert("Menu cleared! You can now reload the initial data.");
+            setRecipes([]);
+        }
+        setLoading(false);
+    };
+
     return (
         <div className="min-h-screen bg-stone-50 text-stone-900 font-sans pb-20">
             <Header
@@ -119,6 +135,7 @@ export default function MenuContainer() {
                     <MasonryGrid
                         recipes={filteredRecipes}
                         onSeed={handleSeedData}
+                        onReset={handleResetData}
                         error={error}
                     />
                 )}

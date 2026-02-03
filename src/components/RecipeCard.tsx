@@ -1,5 +1,6 @@
+import React, { useState } from "react";
 import { Recipe } from "@/lib/types";
-import { Link2, Clock } from "lucide-react";
+import { Link2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface RecipeCardProps {
@@ -19,6 +20,8 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
         }
     };
 
+    const [imgError, setImgError] = useState(false);
+
     const handleClick = () => {
         if (recipe.link) {
             window.open(recipe.link, "_blank", "noopener,noreferrer");
@@ -37,10 +40,11 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
         >
             {/* Image Area */}
             <div className="aspect-[4/3] bg-stone-100 relative overflow-hidden">
-                {recipe.image_url ? (
+                {recipe.image_url && !imgError ? (
                     <img
                         src={recipe.image_url}
                         alt={recipe.title}
+                        onError={() => setImgError(true)}
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                         loading="lazy"
                     />
