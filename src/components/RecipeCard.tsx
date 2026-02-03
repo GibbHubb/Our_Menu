@@ -22,6 +22,7 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
 
     const [imgError, setImgError] = useState(false);
 
+
     const handleClick = () => {
         if (recipe.link) {
             window.open(recipe.link, "_blank", "noopener,noreferrer");

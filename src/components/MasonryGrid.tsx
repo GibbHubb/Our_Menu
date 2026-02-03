@@ -38,7 +38,7 @@ export default function MasonryGrid({ recipes, onSeed, onReset, error }: Masonry
                     Your menu is currently empty. Would you like to load the initial list of Max & Bron's favorites?
                 </p>
 
-                <div className="flex gap-4">
+                <div className="flex flex-col sm:flex-row gap-4">
                     {onSeed && (
                         <button
                             onClick={onSeed}
@@ -46,6 +46,15 @@ export default function MasonryGrid({ recipes, onSeed, onReset, error }: Masonry
                         >
                             <Database className="w-4 h-4" />
                             Load Initial Menu
+                        </button>
+                    )}
+                    {onReset && (
+                        <button
+                            onClick={onReset}
+                            className="px-8 py-3 bg-red-50 text-red-600 rounded-full font-medium hover:bg-red-100 transition-transform active:scale-95 flex items-center gap-2 border border-red-200"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Reset Database
                         </button>
                     )}
                 </div>
@@ -64,11 +73,15 @@ export default function MasonryGrid({ recipes, onSeed, onReset, error }: Masonry
             </div>
 
             {/* Footer / Reset Area */}
-            <div className="flex justify-center pb-12 pt-4 opacity-30 hover:opacity-100 transition-opacity">
+            <div className="flex flex-col items-center gap-4 pb-12 pt-4 border-t border-stone-100 mt-10">
+                <p className="text-stone-400 text-sm italic">Max & Bron's Digital Menu</p>
                 {onReset && (
-                    <button onClick={onReset} className="flex items-center gap-2 text-xs text-red-500 hover:text-red-700 bg-red-50 px-3 py-1 rounded-full">
+                    <button
+                        onClick={onReset}
+                        className="flex items-center gap-2 text-xs font-semibold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-4 py-2 rounded-full border border-red-100 transition-colors shadow-sm"
+                    >
                         <Trash2 className="w-3 h-3" />
-                        Reset Database (Delete All)
+                        Clean Slate (Delete All Recipes)
                     </button>
                 )}
             </div>
