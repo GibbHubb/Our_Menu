@@ -8,18 +8,10 @@ import MasonryGrid from "./MasonryGrid";
 import AddRecipeModal from "./AddRecipeModal";
 import EditRecipeModal from "./EditRecipeModal";
 import DecisionMaker from "./DecisionMaker";
-import RecipeDetailModal from "./RecipeDetailModal";
 import { Plus, Wand2, Database } from "lucide-react";
 import { INITIAL_RECIPES } from "@/lib/initialData";
 
-const CATEGORIES: Category[] = [
-    "Want to Cook",
-    "Mains",
-    "Soup",
-    "Snacks",
-    "Breakfast",
-    "Sweets",
-];
+import { CATEGORIES } from "@/lib/constants";
 
 export default function MenuContainer() {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -173,7 +165,6 @@ export default function MenuContainer() {
                         onSeed={handleSeedData}
                         onReset={handleResetData}
                         onEdit={handleOpenEdit}
-                        onClick={handleOpenDetail}
                         error={error}
                     />
                 )}
