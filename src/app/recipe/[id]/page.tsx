@@ -53,14 +53,27 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
         setNotes(updated.notes || "");
         setShoppingList(updated.shopping_list || "");
 
-        const { error } = await supabase
+        // Exclude UI-only fields if any (though Recipe type maps to DB 1:1)
+        const { error, count } = await supabase
             .from("recipes")
-            .update(updated)
-            .eq("id", updated.id);
+            .update({
+                title: updated.title,
+                category: updated.category,
+                link: updated.link,
+                image_url: updated.image_url,
+                ingredients: updated.ingredients,
+                instructions: updated.instructions,
+                notes: updated.notes,
+                shopping_list: updated.shopping_list
+            })
+            .eq("id", updated.id)
+            .select('id', { count: 'exact' });
 
         if (error) {
-            alert("Error updating recipe: " + error.message);
-            // Revert would go here in a robust app
+            console.error("Update Error:", error);
+            alert(`Failed to save! Error: ${error.message}\nTip: Run 'repair_database.sql' in Supabase.`);
+        } else if (count === 0) {
+            alert("Failed to save! Permission denied (0 rows updated).\nPlease run 'repair_database.sql' in Supabase to fix permissions.");
         }
     };
 
