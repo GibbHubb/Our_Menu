@@ -8,6 +8,7 @@ import MasonryGrid from "./MasonryGrid";
 import AddRecipeModal from "./AddRecipeModal";
 import EditRecipeModal from "./EditRecipeModal";
 import DecisionMaker from "./DecisionMaker";
+import RecipeDetailModal from "./RecipeDetailModal";
 import { Plus, Wand2, Database } from "lucide-react";
 import { INITIAL_RECIPES } from "@/lib/initialData";
 
@@ -30,10 +31,12 @@ export default function MenuContainer() {
     // Modals
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isDecisionOpen, setIsDecisionOpen] = useState(false);
+    const [isDetailOpen, setIsDetailOpen] = useState(false);
 
     // Editing
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
+    const [detailRecipe, setDetailRecipe] = useState<Recipe | null>(null);
 
     // Fetch Recipes
     const fetchRecipes = async () => {
@@ -93,6 +96,11 @@ export default function MenuContainer() {
     const handleOpenEdit = (recipe: Recipe) => {
         setEditingRecipe(recipe);
         setIsEditOpen(true);
+    };
+
+    const handleOpenDetail = (recipe: Recipe) => {
+        setDetailRecipe(recipe);
+        setIsDetailOpen(true);
     };
 
     // Seed Data Handler (Dev/Setup usage)
@@ -165,6 +173,7 @@ export default function MenuContainer() {
                         onSeed={handleSeedData}
                         onReset={handleResetData}
                         onEdit={handleOpenEdit}
+                        onClick={handleOpenDetail}
                         error={error}
                     />
                 )}

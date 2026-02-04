@@ -6,9 +6,10 @@ import { motion } from "framer-motion";
 interface RecipeCardProps {
     recipe: Recipe;
     onEdit?: (recipe: Recipe) => void;
+    onClick?: (recipe: Recipe) => void;
 }
 
-export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
+export default function RecipeCard({ recipe, onEdit, onClick }: RecipeCardProps) {
     // Simple deterministic color seed based on category for placeholder
     const getCategoryColor = (cat: string) => {
         switch (cat) {
@@ -25,8 +26,8 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
 
 
     const handleClick = () => {
-        if (recipe.link) {
-            window.open(recipe.link, "_blank", "noopener,noreferrer");
+        if (onClick) {
+            onClick(recipe);
         }
     };
 
@@ -38,7 +39,7 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
             exit={{ opacity: 0, scale: 0.9 }}
             transition={{ duration: 0.2 }}
             onClick={handleClick}
-            className={`group relative bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all border border-stone-100 flex flex-col break-inside-avoid mb-4 ${recipe.link ? 'cursor-pointer' : ''}`}
+            className="group relative bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all border border-stone-100 flex flex-col break-inside-avoid mb-4 cursor-pointer"
         >
             {/* Image Area */}
             <div className="aspect-[4/3] bg-stone-100 relative overflow-hidden">

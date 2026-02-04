@@ -7,4 +7,8 @@ export interface Recipe {
     category: Category;
     link?: string;
     image_url: string;
+    ingredients?: string;
+    instructions?: string;
+    notes?: string;
+    shopping_list?: string;
 }

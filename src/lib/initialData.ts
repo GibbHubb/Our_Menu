@@ -125,11 +125,46 @@ Nahm Jim Beurre Blanc:
         ingredients: "See full recipe at RecipeTin Eats.",
         instructions: "Click card to view recipe."
     },
-    { title: "Vindaloo", category: "Want to Cook", image_url: getImg("Lamb Vindaloo"), ingredients: "• Lamb shoulder\n• Vindaloo paste\n• Vinegar", instructions: "Marinate meat. Slow cook 2.5 hours." },
-    { title: "Rogan Josh", category: "Want to Cook", image_url: getImg("Rogan Josh"), ingredients: "• Lamb shoulder\n• Yoghurt\n• Kashmiri chilli", instructions: "Fry spices. Brown meat. Simmer with yoghurt." },
-    { title: "Japchae (Korean Noodles)", category: "Want to Cook", image_url: getImg("Japchae"), ingredients: "• Sweet potato glass noodles\n• Beef strips\n• Spinach, Carrot, Mushrooms", instructions: "Boil noodles. Stir fry veg. Toss with sweet soy sesame sauce." },
-    { title: "Tom Yum Soup", category: "Want to Cook", image_url: getImg("Tom Yum Soup"), ingredients: "• Prawns\n• Lemongrass, Galangal, Kaffir Lime\n• Mushrooms\n• Chilli Jam", instructions: "Boil stock with herbs. Add prawns/mushrooms. Season with fish sauce/lime." },
-    { title: "Pork and Fennel Sausage Roll", category: "Want to Cook", image_url: getImg("Sausage Roll"), ingredients: "• Pork Mince\n• Fennel seeds\n• Puff Pastry\n• Apple", instructions: "Mix filling. Roll in pastry. Glaze with egg. Bake 200C." },
+    {
+        title: "Vindaloo",
+        category: "Want to Cook",
+        link: "https://www.recipetineats.com/vindaloo/",
+        image_url: getImg("Lamb Vindaloo"),
+        ingredients: "See full recipe at RecipeTin Eats.",
+        instructions: "Click card to view recipe."
+    },
+    {
+        title: "Rogan Josh",
+        category: "Want to Cook",
+        link: "https://www.recipetineats.com/rogan-josh/",
+        image_url: getImg("Rogan Josh"),
+        ingredients: "See full recipe at RecipeTin Eats.",
+        instructions: "Click card to view recipe."
+    },
+    {
+        title: "Japchae (Korean Noodles)",
+        category: "Want to Cook",
+        link: "https://www.recipetineats.com/japchae-korean-noodles/",
+        image_url: getImg("Japchae"),
+        ingredients: "See full recipe at RecipeTin Eats.",
+        instructions: "Click card to view recipe."
+    },
+    {
+        title: "Tom Yum Soup",
+        category: "Want to Cook",
+        link: "https://www.recipetineats.com/tom-yum-soup-thai/",
+        image_url: getImg("Tom Yum Soup"),
+        ingredients: "See full recipe at RecipeTin Eats.",
+        instructions: "Click card to view recipe."
+    },
+    {
+        title: "Pork and Fennel Sausage Roll",
+        category: "Want to Cook",
+        link: "https://www.maggiebeer.com.au/pages/recipes/pork-and-fennel-sausage-rolls-with-cabernet-barbecue-sauce",
+        image_url: getImg("Sausage Roll"),
+        ingredients: "See full recipe at Maggie Beer.",
+        instructions: "Click card to view recipe."
+    },
 
     // --- MAINS ---
     {
@@ -143,7 +178,7 @@ Nahm Jim Beurre Blanc:
     {
         title: "Dan Dan Noodles",
         category: "Mains",
-        link: "https://www.recipetineats.com/dan-dan-noodles/",
+        link: "https://www.recipetineats.com/dan-dan-noodles-spicy-sichuan-noodles/",
         image_url: getImg("Dan Dan Noodles"),
         ingredients: "See full recipe at RecipeTin Eats.",
         instructions: "Click card to view recipe."
