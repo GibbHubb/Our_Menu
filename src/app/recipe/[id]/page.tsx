@@ -55,7 +55,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
         setShoppingList(updated.shopping_list || "");
 
         // Exclude UI-only fields if any (though Recipe type maps to DB 1:1)
-        const { error, count } = await supabase
+        const { data, error } = await supabase
             .from("recipes")
             .update({
                 title: updated.title,
@@ -68,12 +68,12 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                 shopping_list: updated.shopping_list
             })
             .eq("id", updated.id)
-            .select('id', { count: 'exact' });
+            .select('id');
 
         if (error) {
             console.error("Update Error:", error);
             alert(`Failed to save! Error: ${error.message}\nTip: Run 'repair_database.sql' in Supabase.`);
-        } else if (count === 0) {
+        } else if (!data || data.length === 0) {
             alert("Failed to save! Permission denied (0 rows updated).\nPlease run 'repair_database.sql' in Supabase to fix permissions.");
         }
     };
