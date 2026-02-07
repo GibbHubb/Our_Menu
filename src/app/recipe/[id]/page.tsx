@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import EditRecipeModal from "@/components/EditRecipeModal";
+import ShoppingListComp from "@/components/ShoppingList";
 
 export default function RecipePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -213,11 +214,11 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                                 autoFocus
                             />
                         ) : (
-                            <div className={`prose prose-stone ${!shoppingList && 'italic text-stone-400'}`}>
+                            <div className="mt-2">
                                 {shoppingList ? (
-                                    <div className="whitespace-pre-wrap">{shoppingList}</div>
+                                    <ShoppingListComp initialList={shoppingList} />
                                 ) : (
-                                    "No items in shopping list."
+                                    <p className="text-stone-400 italic">No items in shopping list.</p>
                                 )}
                             </div>
                         )}

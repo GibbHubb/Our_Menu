@@ -7,4 +7,6 @@ export const CATEGORIES: Category[] = [
     "Snacks",
     "Breakfast",
     "Sweets",
+    "Midweek",
+    "Cheap and Healthy",
 ];

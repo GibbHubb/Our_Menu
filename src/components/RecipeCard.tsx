@@ -19,6 +19,8 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
             case "Sweets": return "bg-rose-100 text-rose-800";
             case "Breakfast": return "bg-amber-100 text-amber-800";
             case "Soup": return "bg-stone-200 text-stone-800";
+            case "Midweek": return "bg-indigo-100 text-indigo-800";
+            case "Cheap and Healthy": return "bg-lime-100 text-lime-800";
             default: return "bg-slate-100 text-slate-800";
         }
     };
