@@ -7,7 +7,7 @@ interface EditRecipeModalProps {
     onClose: () => void;
     onUpdate: (updatedRecipe: Recipe) => Promise<void>;
     recipe: Recipe | null;
-    categories: Category[];
+    categories: Category[]; // No change needed here really, but context
 }
 
 export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, categories }: EditRecipeModalProps) {
@@ -71,14 +71,38 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Category</label>
-                            <select
-                                value={formData.category}
-                                onChange={(e) => setFormData({ ...formData, category: e.target.value as Category })}
-                                className="w-full p-3 bg-stone-50 rounded-xl border-none focus:ring-2 focus:ring-amber-500"
-                            >
-                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
+                            <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Categories</label>
+                            <div className="flex flex-wrap gap-2">
+                                {categories.map(c => {
+                                    const currentCats = formData.category || [];
+                                    // Handle legacy string case if necessary, though we migrated
+                                    const isSelected = Array.isArray(currentCats)
+                                        ? currentCats.includes(c)
+                                        : currentCats === c;
+
+                                    return (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => {
+                                                let newCats = Array.isArray(currentCats) ? [...currentCats] : [currentCats as Category];
+                                                if (newCats.includes(c)) {
+                                                    newCats = newCats.filter(cat => cat !== c);
+                                                } else {
+                                                    newCats.push(c);
+                                                }
+                                                setFormData({ ...formData, category: newCats });
+                                            }}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${isSelected
+                                                ? "bg-stone-900 text-white shadow-md transform scale-105"
+                                                : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                                                }`}
+                                        >
+                                            {c}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
 

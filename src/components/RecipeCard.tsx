@@ -21,6 +21,9 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
             case "Soup": return "bg-stone-200 text-stone-800";
             case "Midweek": return "bg-indigo-100 text-indigo-800";
             case "Cheap and Healthy": return "bg-lime-100 text-lime-800";
+            case "Salad": return "bg-green-100 text-green-800";
+            case "Pasta": return "bg-yellow-100 text-yellow-800";
+            case "Winter Warmer": return "bg-blue-100 text-blue-800";
             default: return "bg-slate-100 text-slate-800";
         }
     };
@@ -58,10 +61,12 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                     )}
 
                     {/* Category Tag Overlay */}
-                    <div className="absolute top-3 left-3">
-                        <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${getCategoryColor(recipe.category)} shadow-sm`}>
-                            {recipe.category}
-                        </span>
+                    <div className="absolute top-3 left-3 flex flex-wrap gap-1 max-w-[80%]">
+                        {recipe.category.map((cat) => (
+                            <span key={cat} className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${getCategoryColor(cat)} shadow-sm`}>
+                                {cat}
+                            </span>
+                        ))}
                     </div>
 
                     <div className="absolute top-3 right-3 flex gap-2">

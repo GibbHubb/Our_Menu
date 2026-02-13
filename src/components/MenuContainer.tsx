@@ -55,7 +55,7 @@ export default function MenuContainer() {
     // Filter Logic
     const filteredRecipes = recipes.filter((recipe) => {
         const matchesCategory =
-            selectedCategory === "All" || recipe.category === selectedCategory;
+            selectedCategory === "All" || recipe.category.includes(selectedCategory);
         const matchesSearch = recipe.title
             .toLowerCase()
             .includes(searchTerm.toLowerCase());

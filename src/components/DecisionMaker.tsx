@@ -13,15 +13,25 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
     const [selected, setSelected] = useState<Recipe | null>(null);
     const [isSpinning, setIsSpinning] = useState(false);
 
+    const [selectedCategory, setSelectedCategory] = useState<string>("All");
+
     // Pick a random recipe
     const pickRandom = () => {
-        if (recipes.length === 0) return;
+        const candidates = selectedCategory === "All"
+            ? recipes
+            : recipes.filter(r => r.category && r.category.includes(selectedCategory as any));
+
+        if (candidates.length === 0) {
+            setSelected(null);
+            return;
+        }
+
         setIsSpinning(true);
         setSelected(null);
 
         // Fake "spinning" delay
         setTimeout(() => {
-            const random = recipes[Math.floor(Math.random() * recipes.length)];
+            const random = candidates[Math.floor(Math.random() * candidates.length)];
             setSelected(random);
             setIsSpinning(false);
         }, 800);
@@ -31,7 +41,7 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
         if (isOpen && recipes.length > 0) {
             pickRandom();
         }
-    }, [isOpen]);
+    }, [isOpen]); // Keep simple dependency to avoid infinite loops if we added selectedCategory here
 
     if (!isOpen) return null;
 
@@ -45,6 +55,24 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
                 <h2 className="font-serif text-3xl text-white mb-8 text-center">
                     {isSpinning ? "Consulting the Food Gods..." : "Have you tried..."}
                 </h2>
+
+                <div className="flex flex-wrap justify-center gap-2 mb-6 max-w-xs">
+                    {["All", "Mains", "Midweek", "Salad", "Pasta", "Soup", "Snacks"].map(cat => (
+                        <button
+                            key={cat}
+                            onClick={() => {
+                                setSelectedCategory(cat);
+                                // Optional: auto-spin on change? Maybe better to let them click spin.
+                            }}
+                            className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${selectedCategory === cat
+                                    ? "bg-amber-500 text-stone-900"
+                                    : "bg-white/10 text-white hover:bg-white/20"
+                                }`}
+                        >
+                            {cat}
+                        </button>
+                    ))}
+                </div>
 
                 {isSpinning ? (
                     <div className="w-64 h-80 bg-white/5 rounded-2xl animate-pulse flex items-center justify-center border border-white/10">

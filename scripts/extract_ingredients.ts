@@ -50,6 +50,76 @@ interface Recipe {
 
 // --- Main Logic ---
 
+// --- LLM Helper ---
+
+async function extractWithLLM(url: string, html: string): Promise<string[] | null> {
+    try {
+        console.log(` Attempting LLM extraction for ${url}...`);
+
+        // Naive clean up: remove scripts, styles, comments to reduce token count
+        const textContent = html
+            .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
+            .replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gim, "")
+            .replace(/<!--([\s\S]*?)-->/gim, "")
+            .replace(/<[^>]+>/g, "\n") // strip tags
+            .replace(/\n\s*\n/g, "\n") // collapse newlines
+            .slice(0, 15000); // Limit to ~15k chars to be safe for typical context windows
+
+        const prompt = `
+You are a grocery list extractor.
+I will give you the text content of a recipe webpage.
+Your task is to extract the list of ingredients/shopping list.
+Return ONLY the ingredients as a JSON array of strings.
+Do not include any conversational text.
+Example response: ["1 onion", "500g beef", "Salt"]
+
+Webpage URL: ${url}
+Content:
+${textContent}
+`;
+
+        const response = await fetch("http://192.168.2.182:8003/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                // "Authorization": "Bearer not-needed" // vLLM usually doesn't need key if not configured
+            },
+            body: JSON.stringify({
+                model: "meta-llama/Meta-Llama-3-8B-Instruct", // Just a guess/placeholder, usually vLLM ignores or uses loaded model
+                messages: [
+                    { role: "system", content: "You are a helpful assistant that extracts ingredients from recipes as a JSON array." },
+                    { role: "user", content: prompt }
+                ],
+                temperature: 0.1,
+                max_tokens: 1000
+            })
+        });
+
+        if (!response.ok) {
+            console.warn(`LLM request failed: ${response.status} ${response.statusText}`);
+            return null;
+        }
+
+        const json = await response.json();
+        const content = json.choices?.[0]?.message?.content;
+
+        if (!content) return null;
+
+        // Try to parse JSON from content (it might be wrapped in markdown code blocks)
+        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
+        }
+
+        // Fallback for non-json response (bullet points)
+        return content.split('\n').filter((l: string) => l.trim().startsWith('-')).map((l: string) => l.replace(/^[-\s*]+/, '').trim());
+
+    } catch (e) {
+        console.error("LLM extraction error:", e);
+        return null;
+    }
+}
+
 async function fetchAndParseRecipe(url: string): Promise<string[] | null> {
     try {
         console.log(`Fetching ${url}...`);
@@ -60,8 +130,7 @@ async function fetchAndParseRecipe(url: string): Promise<string[] | null> {
         }
         const html = await response.text();
 
-        // Extract JSON-LD
-        // Simple regex to find <script type="application/ld+json">...</script>
+        // 1. Try JSON-LD first (fast & accurate)
         const jsonLdRegex = /<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/gi;
         let match;
 
@@ -86,12 +155,6 @@ async function fetchAndParseRecipe(url: string): Promise<string[] | null> {
                         if (obj['@graph']) {
                             return findRecipe(obj['@graph']);
                         }
-                        // Shallow search in properties just in case, though usually it's top level or in graph
-                        for (const key in obj) {
-                            if (typeof obj[key] === 'object') {
-                                // Recursive might be too deep, but let's try shallow graph traverse or specific keys
-                            }
-                        }
                     }
                     return null;
                 };
@@ -104,6 +167,7 @@ async function fetchAndParseRecipe(url: string): Promise<string[] | null> {
                         ingredients = [ingredients];
                     }
                     if (Array.isArray(ingredients)) {
+                        console.log("Found JSON-LD ingredients!");
                         return ingredients.map((i: any) => i.toString().trim());
                     }
                 }
@@ -112,8 +176,8 @@ async function fetchAndParseRecipe(url: string): Promise<string[] | null> {
             }
         }
 
-        console.log("No JSON-LD Recipe with recipeIngredient found.");
-        return null;
+        console.log("No JSON-LD Recipe found. Falling back to LLM...");
+        return await extractWithLLM(url, html);
 
     } catch (error) {
         console.error(`Error processing ${url}:`, error);

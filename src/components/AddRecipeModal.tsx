@@ -5,15 +5,20 @@ import { Category } from "@/lib/types";
 interface AddRecipeModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onAdd: (data: { title: string; category: Category; link: string; image_url: string }) => Promise<void>;
+    onAdd: (data: { title: string; category: Category[]; link: string; image_url: string }) => Promise<void>;
     categories: Category[];
 }
 
 export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: AddRecipeModalProps) {
     const [loading, setLoading] = useState(false);
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<{
+        title: string;
+        category: Category[];
+        link: string;
+        image_url: string;
+    }>({
         title: "",
-        category: "Mains" as Category,
+        category: ["Mains"],
         link: "",
         image_url: "",
     });
@@ -26,7 +31,7 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
         try {
             await onAdd(formData);
             onClose();
-            setFormData({ title: "", category: "Mains", link: "", image_url: "" });
+            setFormData({ title: "", category: ["Mains"], link: "", image_url: "" });
         } catch (err) {
             console.error("Failed to add recipe", err);
         } finally {
@@ -58,14 +63,31 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-stone-700 mb-1">Category</label>
-                        <select
-                            className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-stone-900 focus:outline-none bg-white"
-                            value={formData.category}
-                            onChange={(e) => setFormData({ ...formData, category: e.target.value as Category })}
-                        >
-                            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                        </select>
+                        <label className="block text-sm font-medium text-stone-700 mb-2">Categories</label>
+                        <div className="flex flex-wrap gap-2">
+                            {categories.map(cat => {
+                                const isSelected = formData.category.includes(cat);
+                                return (
+                                    <button
+                                        key={cat}
+                                        type="button"
+                                        onClick={() => {
+                                            if (isSelected) {
+                                                setFormData({ ...formData, category: formData.category.filter(c => c !== cat) });
+                                            } else {
+                                                setFormData({ ...formData, category: [...formData.category, cat] });
+                                            }
+                                        }}
+                                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${isSelected
+                                            ? "bg-stone-900 text-white shadow-md transform scale-105"
+                                            : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                                            }`}
+                                    >
+                                        {cat}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
 
                     <div>
