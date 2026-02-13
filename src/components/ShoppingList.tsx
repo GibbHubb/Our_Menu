@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Check, Copy, Minus, Plus, RefreshCw } from "lucide-react";
+import { Check, Copy, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ShoppingListProps {
@@ -152,23 +152,31 @@ export default function ShoppingList({ initialList }: ShoppingListProps) {
         <div className="space-y-4">
             {/* Controls */}
             <div className="flex flex-wrap items-center justify-between gap-4 bg-stone-50 p-3 rounded-xl border border-stone-100">
-                <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-stone-600">Scale:</span>
-                    <div className="flex items-center bg-white rounded-lg border border-stone-200 shadow-sm">
-                        <button
-                            onClick={() => handleScale(scale - 0.5)}
-                            className="p-2 hover:bg-stone-50 text-stone-600 disabled:opacity-30"
-                            disabled={scale <= 0.5}
-                        >
-                            <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="w-12 text-center font-bold text-stone-800">{scale}x</span>
-                        <button
-                            onClick={() => handleScale(scale + 0.5)}
-                            className="p-2 hover:bg-stone-50 text-stone-600"
-                        >
-                            <Plus className="w-4 h-4" />
-                        </button>
+                <div className="flex items-center gap-4 w-full sm:w-auto">
+                    <div className="flex flex-col gap-1 w-full sm:w-48">
+                        <div className="flex justify-between items-end">
+                            <label htmlFor="servings-slider" className="text-xs font-bold uppercase tracking-wider text-stone-500">
+                                Servings / Meals
+                            </label>
+                            <span className="font-bold text-stone-900 bg-white px-2 py-0.5 rounded border border-stone-200 text-sm">
+                                {scale}x
+                            </span>
+                        </div>
+                        <input
+                            id="servings-slider"
+                            type="range"
+                            min="0.5"
+                            max="10"
+                            step="0.5"
+                            value={scale}
+                            onChange={(e) => handleScale(parseFloat(e.target.value))}
+                            className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400"
+                        />
+                        <div className="flex justify-between text-[10px] text-stone-400 font-mono">
+                            <span>0.5</span>
+                            <span>5</span>
+                            <span>10</span>
+                        </div>
                     </div>
                 </div>
 
