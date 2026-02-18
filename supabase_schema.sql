@@ -3,7 +3,7 @@ create table public.recipes (
   id uuid default gen_random_uuid() primary key,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   title text not null,
-  category text not null, -- 'Want to Cook', 'Mains', 'Soup', 'Snacks', 'Breakfast', 'Sweets'
+  category text[] not null, -- 'Want to Cook', 'Mains', etc. Array for multiple tags
   link text,
   image_url text,
   ingredients text, -- New: Store ingredients list

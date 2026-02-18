@@ -4,7 +4,7 @@ import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Recipe } from "@/lib/types";
 import { CATEGORIES } from "@/lib/constants";
-import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Edit2, Save, MoreHorizontal, Pencil } from "lucide-react";
+import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Edit2, Save, MoreHorizontal, Pencil, Copy, Check } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -150,10 +150,18 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                             No Image
                         </div>
                     )}
-                    <div className="absolute bottom-4 left-4">
-                        <span className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-lg text-sm font-bold text-stone-900 shadow-sm border border-stone-200">
-                            {recipe.category}
-                        </span>
+                    <div className="absolute bottom-4 left-4 flex flex-wrap gap-2">
+                        {Array.isArray(recipe.category) ? (
+                            recipe.category.map((cat, idx) => (
+                                <span key={idx} className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-lg text-sm font-bold text-stone-900 shadow-sm border border-stone-200">
+                                    {cat}
+                                </span>
+                            ))
+                        ) : (
+                            <span className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-lg text-sm font-bold text-stone-900 shadow-sm border border-stone-200">
+                                {recipe.category}
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -228,7 +236,29 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                     {showFullContent && (
                         <div className="grid md:grid-cols-2 gap-6">
                             <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
-                                <h3 className="text-xl font-serif font-bold text-stone-900 mb-4 border-b border-stone-100 pb-2">Ingredients</h3>
+                                <div className="flex items-center justify-between mb-4 border-b border-stone-100 pb-2">
+                                    <h3 className="text-xl font-serif font-bold text-stone-900">Ingredients</h3>
+                                    <button
+                                        onClick={() => {
+                                            if (recipe.ingredients) {
+                                                navigator.clipboard.writeText(recipe.ingredients);
+                                                // Optional: Could show a toast here, for now simple feedback
+                                                const btn = document.getElementById('copy-btn');
+                                                if (btn) {
+                                                    const original = btn.innerHTML;
+                                                    btn.innerHTML = '<span class="flex items-center gap-1 text-emerald-600"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!</span>';
+                                                    setTimeout(() => { btn.innerHTML = original; }, 2000);
+                                                }
+                                            }
+                                        }}
+                                        id="copy-btn"
+                                        className="text-sm text-stone-500 hover:text-stone-900 flex items-center gap-1 px-2 py-1 hover:bg-stone-100 rounded transition-colors"
+                                        title="Copy Ingredients"
+                                    >
+                                        <Copy className="w-4 h-4" />
+                                        <span className="hidden sm:inline">Copy</span>
+                                    </button>
+                                </div>
                                 <div className="whitespace-pre-wrap text-stone-700 leading-relaxed">
                                     {recipe.ingredients || "No ingredients listed."}
                                 </div>

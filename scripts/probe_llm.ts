@@ -1,9 +1,9 @@
 
-const BASE_URL = "http://192.168.2.182:8003";
+const PROBE_BASE_URL = "http://192.168.2.182:8003";
 
 async function check(name: string, path: string, method: string = "GET", body?: any) {
     try {
-        const url = `${BASE_URL}${path}`;
+        const url = `${PROBE_BASE_URL}${path}`;
         const opts: any = { method };
         if (body) {
             opts.headers = { "Content-Type": "application/json" };
@@ -24,7 +24,7 @@ async function check(name: string, path: string, method: string = "GET", body?: 
 }
 
 async function main() {
-    console.log(`Target: ${BASE_URL}`);
+    console.log(`Target: ${PROBE_BASE_URL}`);
     await check("Root", "/");
     await check("Health", "/health");
     await check("Ping", "/ping");
@@ -49,3 +49,6 @@ async function main() {
 }
 
 main();
+
+// Forces this file to be a module
+export { };
