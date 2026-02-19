@@ -1,4 +1,4 @@
-export type Category = 'Want to Cook' | 'Mains' | 'Back Burner' | 'Soup' | 'Snacks' | 'Breakfast' | 'Sweets' | 'Midweek' | 'Cheap and Healthy' | 'Salad' | 'Pasta' | 'Winter Warmer';
+export type Category = 'Want to Cook' | 'Mains' | 'Soup' | 'Snacks' | 'Breakfast' | 'Sweets' | 'Midweek' | 'Cheap and Healthy' | 'Salad' | 'Pasta' | 'Winter Warmer';
 
 export interface Recipe {
     id: string;

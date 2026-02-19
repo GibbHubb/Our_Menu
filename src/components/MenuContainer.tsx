@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { Category, Recipe } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
 import Header from "./Header";
@@ -10,15 +10,31 @@ import EditRecipeModal from "./EditRecipeModal";
 import DecisionMaker from "./DecisionMaker";
 import { Plus, Wand2, Database } from "lucide-react";
 import { INITIAL_RECIPES } from "@/lib/initialData";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { CATEGORIES } from "@/lib/constants";
 
-export default function MenuContainer() {
+function MenuContent() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [selectedCategory, setSelectedCategory] = useState<Category | "All">("All");
-    const [searchTerm, setSearchTerm] = useState("");
+
+    const initialCategory = (searchParams.get("category") as Category) || "All";
+    const initialSearch = searchParams.get("search") || "";
+
+    const [selectedCategory, setSelectedCategory] = useState<Category | "All">(initialCategory);
+    const [searchTerm, setSearchTerm] = useState(initialSearch);
+
+    // Sync state to URL
+    useEffect(() => {
+        const params = new URLSearchParams();
+        if (selectedCategory !== "All") params.set("category", selectedCategory);
+        if (searchTerm) params.set("search", searchTerm);
+        router.replace(`?${params.toString()}`, { scroll: false });
+    }, [selectedCategory, searchTerm, router]);
 
     // Modals
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -54,11 +70,16 @@ export default function MenuContainer() {
 
     // Filter Logic
     const filteredRecipes = recipes.filter((recipe) => {
-        const matchesCategory =
-            selectedCategory === "All" || recipe.category.includes(selectedCategory);
-        const matchesSearch = recipe.title
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase());
+        const normalizedSearch = searchTerm.toLowerCase();
+        const matchesSearch = recipe.title.toLowerCase().includes(normalizedSearch) ||
+            (recipe.ingredients && recipe.ingredients.toLowerCase().includes(normalizedSearch));
+
+        // If there is a search term, we search ALL categories (user request).
+        // Otherwise, we filter by the selected category.
+        const matchesCategory = searchTerm
+            ? true
+            : (selectedCategory === "All" || recipe.category.includes(selectedCategory));
+
         return matchesCategory && matchesSearch;
     });
 
@@ -210,5 +231,13 @@ export default function MenuContainer() {
                 recipes={filteredRecipes}
             />
         </div>
+    );
+}
+
+export default function MenuContainer() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-stone-50" />}>
+            <MenuContent />
+        </Suspense>
     );
 }

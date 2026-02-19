@@ -1,71 +1,13 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { Check, Copy, RefreshCw } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useEffect } from "react";
+import { Check, Copy } from "lucide-react";
+import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
 
 interface ShoppingListProps {
     initialList: string;
 }
-
-interface ParsedItem {
-    original: string;
-    name: string;
-    quantity: number | null;
-    unit: string | null;
-    isStandard: boolean;
-    isChecked: boolean;
-    id: string; // unique derived id
-}
-
-const STANDARD_ITEMS = [
-    "salt", "pepper", "black pepper", "white pepper",
-    "oil", "olive oil", "vegetable oil", "sunflower oil", "canola oil",
-    "water",
-    "sugar",
-    "flour",
-    "spices", "spice"
-];
-
-// Regex to find quantity at start: "1.5 cups...", "1/2 tsp...", "2 onions"
-// Captures: 1: quantity (whole/float/fraction), 2: rest
-const QUANTITY_REGEX = /^(\d+(?:\.\d+)?|\d+\/\d+)\s*(.*)$/;
-
-const parseQuantity = (str: string): number => {
-    if (str.includes('/')) {
-        const [num, den] = str.split('/').map(Number);
-        return den !== 0 ? num / den : 0;
-    }
-    return parseFloat(str);
-};
-
-// Simple decimal to fraction converter for display could be nice, but decimals are safer for now.
-const formatQuantity = (num: number): string => {
-    // 0.25 -> 1/4, 0.5 -> 1/2, 0.33 -> 1/3, 0.66 -> 2/3
-    // For now, let's just do cleaner decimals
-    if (Math.abs(num % 1) < 0.01) return num.toFixed(0);
-
-    // Check common fractions
-    const decimal = num % 1;
-    const whole = Math.floor(num);
-
-    const closeTo = (n: number, target: number) => Math.abs(n - target) < 0.05;
-
-    let fraction = "";
-    if (closeTo(decimal, 0.25)) fraction = "1/4";
-    else if (closeTo(decimal, 0.33)) fraction = "1/3";
-    else if (closeTo(decimal, 0.5)) fraction = "1/2";
-    else if (closeTo(decimal, 0.66)) fraction = "2/3";
-    else if (closeTo(decimal, 0.75)) fraction = "3/4";
-
-    if (fraction) {
-        return whole > 0 ? `${whole} ${fraction}` : fraction;
-    }
-
-    // Default to 1 decimal place if small, 2 if needed
-    return num.toFixed(1).replace(/\.0$/, '');
-};
 
 export default function ShoppingList({ initialList }: ShoppingListProps) {
     const [scale, setScale] = useState(1);
@@ -80,39 +22,7 @@ export default function ShoppingList({ initialList }: ShoppingListProps) {
         }
 
         const lines = initialList.split('\n').filter(line => line.trim().length > 0);
-
-        const parsed: ParsedItem[] = lines.map((line, idx) => {
-            const cleanLine = line.trim().replace(/^[-*•]\s*/, ''); // Remove bullet points
-            const match = cleanLine.match(QUANTITY_REGEX);
-
-            let quantity: number | null = null;
-            let rest = cleanLine;
-
-            if (match) {
-                quantity = parseQuantity(match[1]);
-                rest = match[2];
-            }
-
-            // Check if standard
-            // We check if the name part contains any of the standard keywords as a whole word
-            const lowerRest = rest.toLowerCase();
-            const isStandard = STANDARD_ITEMS.some(si =>
-                lowerRest === si ||
-                lowerRest.startsWith(si + ' ') ||
-                lowerRest.endsWith(' ' + si) ||
-                lowerRest.includes(' ' + si + ' ')
-            );
-
-            return {
-                original: cleanLine,
-                name: rest,
-                quantity,
-                unit: null, // Basic unit extraction implies more complexity, skipping for now
-                isStandard,
-                isChecked: !isStandard, // Standard items UNCHECKED by default, others CHECKED
-                id: `item-${idx}`
-            };
-        });
+        const parsed: ParsedItem[] = lines.map((line, idx) => parseIngredientLine(line, idx));
 
         setItems(parsed);
     }, [initialList]);
@@ -132,10 +42,12 @@ export default function ShoppingList({ initialList }: ShoppingListProps) {
         const linesToCopy = items
             .filter(item => item.isChecked)
             .map(item => {
+                let text = item.name;
                 if (item.quantity !== null) {
-                    return `${formatQuantity(item.quantity * scale)} ${item.name}`;
+                    text = `${formatQuantity(item.quantity * scale)} ${item.name}`;
                 }
-                return item.name;
+                // Apple Notes checklist format
+                return `- [ ] ${text}`;
             });
 
         navigator.clipboard.writeText(linesToCopy.join('\n'))

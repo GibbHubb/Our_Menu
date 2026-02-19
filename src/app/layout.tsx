@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
+import AIChat from "@/components/AIChat";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -46,6 +47,7 @@ export default function RootLayout({
         className={`${playfair.variable} ${inter.variable} antialiased bg-stone-50 text-stone-900`}
       >
         {children}
+        <AIChat />
       </body>
     </html>
   );

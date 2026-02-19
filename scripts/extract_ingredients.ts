@@ -78,16 +78,31 @@ Content:
 ${textContent}
 `;
 
+        // Auto-detect model if possible, or use a default
+        let modelName = "meta-llama/Meta-Llama-3-8B-Instruct";
+        try {
+            const modelRes = await fetch("http://192.168.2.182:8003/v1/models");
+            if (modelRes.ok) {
+                const modelData = await modelRes.json();
+                if (modelData.data && modelData.data.length > 0) {
+                    modelName = modelData.data[0].id;
+                    console.log(`Using detected model: ${modelName}`);
+                }
+            }
+        } catch (e) {
+            console.warn("Could not auto-detect model, using default.");
+        }
+
+        // Use standard OpenAI-compatible endpoint
         const response = await fetch("http://192.168.2.182:8003/v1/chat/completions", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                // "Authorization": "Bearer not-needed" // vLLM usually doesn't need key if not configured
             },
             body: JSON.stringify({
-                model: "meta-llama/Meta-Llama-3-8B-Instruct", // Just a guess/placeholder, usually vLLM ignores or uses loaded model
+                model: modelName,
                 messages: [
-                    { role: "system", content: "You are a helpful assistant that extracts ingredients from recipes as a JSON array." },
+                    { role: "system", content: "You are a grocery list extractor. Return ONLY a JSON array of ingredients." },
                     { role: "user", content: prompt }
                 ],
                 temperature: 0.1,
@@ -120,7 +135,7 @@ ${textContent}
     }
 }
 
-async function fetchAndParseRecipe(url: string): Promise<string[] | null> {
+async function fetchAndParseRecipe(url: string, title: string): Promise<{ ingredients: string[], categories: string[] } | null> {
     try {
         console.log(`Fetching ${url}...`);
         const response = await fetch(url);
@@ -129,6 +144,7 @@ async function fetchAndParseRecipe(url: string): Promise<string[] | null> {
             return null;
         }
         const html = await response.text();
+        let extractedIngredients: string[] | null = null;
 
         // 1. Try JSON-LD first (fast & accurate)
         const jsonLdRegex = /<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/gi;
@@ -139,7 +155,6 @@ async function fetchAndParseRecipe(url: string): Promise<string[] | null> {
                 const jsonContent = match[1];
                 const data = JSON.parse(jsonContent);
 
-                // Helper to find Recipe object in potentially nested structure
                 const findRecipe = (obj: any): any => {
                     if (!obj) return null;
                     if (Array.isArray(obj)) {
@@ -151,10 +166,7 @@ async function fetchAndParseRecipe(url: string): Promise<string[] | null> {
                         if (obj['@type'] === 'Recipe' || (Array.isArray(obj['@type']) && obj['@type'].includes('Recipe'))) {
                             return obj;
                         }
-                        // Check explicit @graph
-                        if (obj['@graph']) {
-                            return findRecipe(obj['@graph']);
-                        }
+                        if (obj['@graph']) return findRecipe(obj['@graph']);
                     }
                     return null;
                 };
@@ -163,12 +175,11 @@ async function fetchAndParseRecipe(url: string): Promise<string[] | null> {
 
                 if (recipeData && recipeData.recipeIngredient) {
                     let ingredients = recipeData.recipeIngredient;
-                    if (typeof ingredients === 'string') {
-                        ingredients = [ingredients];
-                    }
+                    if (typeof ingredients === 'string') ingredients = [ingredients];
                     if (Array.isArray(ingredients)) {
                         console.log("Found JSON-LD ingredients!");
-                        return ingredients.map((i: any) => i.toString().trim());
+                        extractedIngredients = ingredients.map((i: any) => i.toString().trim());
+                        break; // Stop after finding first valid recipe
                     }
                 }
             } catch (jsonError) {
@@ -176,8 +187,8 @@ async function fetchAndParseRecipe(url: string): Promise<string[] | null> {
             }
         }
 
-        console.log("No JSON-LD Recipe found. Falling back to LLM...");
-        return await extractWithLLM(url, html);
+        // 2. Enriched with LLM (for categories AND ingredients if missing)
+        return await enrichWithLLM(url, html, extractedIngredients, title);
 
     } catch (error) {
         console.error(`Error processing ${url}:`, error);
@@ -185,14 +196,23 @@ async function fetchAndParseRecipe(url: string): Promise<string[] | null> {
     }
 }
 
+// Main Execution
 async function main() {
-    console.log("Starting grocery list extraction...");
+    console.log("Starting recipe enrichment (Ingredients + Categories)...");
 
-    // 1. Get recipes with links but no shopping list
-    // Note: Checking for null or empty string
+    // Fetch recipes that need processing. 
+    // We process ALL recipes that have a link, to update their categories too.
+    // Or maybe just ones with missing shopping list OR default 'Mains' category if we want to be smart.
+    // For now, let's process ones that haven't been enriched yet.
+    // We can assume if shopping_list is populated, we might have skipped it. 
+    // BUT the user specifically asked to apply tags. So let's re-process everything with a link.
+
+    // To safe time, maybe checking if category is just ["Mains"] (default) or empty?
+    // Let's do ALL to be safe, but maybe limit concurrency.
+
     const { data: recipes, error } = await supabase
         .from('recipes')
-        .select('id, title, link, shopping_list')
+        .select('id, title, link, shopping_list, category')
         .not('link', 'is', null)
         .neq('link', '');
 
@@ -201,31 +221,57 @@ async function main() {
         return;
     }
 
-    const recipesToProcess = recipes.filter(r => !r.shopping_list || r.shopping_list.trim() === '');
+    console.log(`Found ${recipes.length} recipes with links.`);
 
-    console.log(`Found ${recipesToProcess.length} recipes to process out of ${recipes.length} total.`);
-
-    for (const recipe of recipesToProcess) {
-        if (!recipe.link) continue;
+    for (const recipe of recipes) {
+        // Skip if we already have a robust shopping list AND complex categories?
+        // Actually, user wants to apply tags.
+        // Let's re-process all.
 
         console.log(`Processing "${recipe.title}" (${recipe.link})`);
-        const ingredients = await fetchAndParseRecipe(recipe.link);
 
-        if (ingredients && ingredients.length > 0) {
-            const shoppingList = ingredients.map(i => `- [ ] ${i}`).join('\n');
+        const result = await fetchAndParseRecipe(recipe.link, recipe.title);
 
-            const { error: updateError } = await supabase
-                .from('recipes')
-                .update({ shopping_list: shoppingList })
-                .eq('id', recipe.id);
+        if (result) {
+            const { ingredients, categories } = result;
 
-            if (updateError) {
-                console.error(`Failed to update recipe ${recipe.id}:`, updateError);
+            // Prepare update object
+            const updates: any = {};
+
+            // Update shopping list if it was empty
+            if ((!recipe.shopping_list || recipe.shopping_list.length < 10) && ingredients.length > 0) {
+                updates.shopping_list = ingredients.map(i => `- [ ] ${i}`).join('\n');
+            }
+
+            // Update categories if we found new ones
+            // We'll merge with existing unique ones, or just replace?
+            // User said "apply the multiple tags". Replacing is probably cleaner if the current one is just "Mains" or "Want to Cook".
+            // Let's merge unique.
+            if (categories && categories.length > 0) {
+                // Ensure current isn't null
+                const currentCats = Array.isArray(recipe.category) ? recipe.category : [];
+                const merged = Array.from(new Set([...currentCats, ...categories]));
+                // Filter to only ALLOWED one (LLM might hallucinate)
+                const validMerged = merged.filter(c => ALLOWED_CATEGORIES.includes(c));
+
+                if (validMerged.length > 0) {
+                    updates.category = validMerged;
+                }
+            }
+
+            if (Object.keys(updates).length > 0) {
+                const { error: updateError } = await supabase
+                    .from('recipes')
+                    .update(updates)
+                    .eq('id', recipe.id);
+
+                if (updateError) console.error(`Failed to update ${recipe.title}:`, updateError);
+                else console.log(`✅ Updated "${recipe.title}"`, updates);
             } else {
-                console.log(`Successfully updated shopping list for "${recipe.title}"`);
+                console.log(`No updates needed for "${recipe.title}"`);
             }
         } else {
-            console.log(`Could not extract ingredients for "${recipe.title}"`);
+            console.log(`Could not enrich "${recipe.title}"`);
         }
 
         // Polite delay

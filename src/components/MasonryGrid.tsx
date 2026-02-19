@@ -66,7 +66,7 @@ export default function MasonryGrid({ recipes, onSeed, onReset, onEdit, onClick,
 
     return (
         <div>
-            <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 px-4 pb-20 space-y-4">
+            <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 px-4 pb-20">
                 <AnimatePresence>
                     {recipes.map((recipe) => (
                         <RecipeCard key={recipe.id} recipe={recipe} onEdit={onEdit} onClick={onClick} />
