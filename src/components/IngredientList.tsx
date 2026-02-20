@@ -6,10 +6,11 @@ import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUti
 
 interface IngredientListProps {
     ingredients: string;
+    scale: number;
+    setScale: (s: number) => void;
 }
 
-export default function IngredientList({ ingredients }: IngredientListProps) {
-    const [scale, setScale] = useState(1);
+export default function IngredientList({ ingredients, scale, setScale }: IngredientListProps) {
     const [items, setItems] = useState<ParsedItem[]>([]);
     const [showCopied, setShowCopied] = useState(false);
 
@@ -28,17 +29,36 @@ export default function IngredientList({ ingredients }: IngredientListProps) {
     };
 
     const handleCopy = () => {
-        const text = items.map(item => {
+        const textLines: string[] = [];
+        const htmlLines: string[] = [];
+
+        items.forEach(item => {
             let itemText = item.name;
             if (item.quantity !== null) {
                 itemText = `${formatQuantity(item.quantity * scale)} ${item.name}`;
             }
-            return itemText;
-        }).join('\n');
+            textLines.push(`- [ ] ${itemText}`);
+            htmlLines.push(`<li><input type="checkbox" /> ${itemText}</li>`);
+        });
 
-        navigator.clipboard.writeText(text).then(() => {
+        const text = textLines.join('\n');
+        const html = `<ul class="checklist" style="list-style-type: none; padding: 0;">\n${htmlLines.join('\n')}\n</ul>`;
+
+        const clipboardItem = new ClipboardItem({
+            'text/plain': new Blob([text], { type: 'text/plain' }),
+            'text/html': new Blob([html], { type: 'text/html' })
+        });
+
+        navigator.clipboard.write([clipboardItem]).then(() => {
             setShowCopied(true);
             setTimeout(() => setShowCopied(false), 2000);
+        }).catch(err => {
+            console.error("Failed to copy richly:", err);
+            // Fallback
+            navigator.clipboard.writeText(text).then(() => {
+                setShowCopied(true);
+                setTimeout(() => setShowCopied(false), 2000);
+            });
         });
     };
 

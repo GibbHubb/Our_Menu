@@ -26,6 +26,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
     const [notes, setNotes] = useState("");
     const [shoppingList, setShoppingList] = useState("");
     const [isEditingShoppingList, setIsEditingShoppingList] = useState(false);
+    const [scale, setScale] = useState(1);
 
     useEffect(() => {
         const fetchRecipe = async () => {
@@ -122,9 +123,9 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
         <div className="min-h-screen bg-stone-50 font-sans pb-20">
             {/* Minimal Header */}
             <div className="bg-white sticky top-0 z-40 border-b border-stone-100 px-4 py-3 flex items-center justify-between shadow-sm">
-                <Link href="/" className="p-2 -ml-2 text-stone-600 hover:bg-stone-100 rounded-full transition-colors">
+                <button onClick={() => router.back()} className="p-2 -ml-2 text-stone-600 hover:bg-stone-100 rounded-full transition-colors">
                     <ArrowLeft className="w-6 h-6" />
-                </Link>
+                </button>
                 <span className="font-serif font-bold text-stone-900 truncate max-w-[60%]">
                     {recipe.title}
                 </span>
@@ -225,7 +226,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                         ) : (
                             <div className="mt-2">
                                 {shoppingList ? (
-                                    <ShoppingListComp initialList={shoppingList} />
+                                    <ShoppingListComp initialList={shoppingList} scale={scale} setScale={setScale} />
                                 ) : (
                                     <p className="text-stone-400 italic">No items in shopping list.</p>
                                 )}
@@ -237,7 +238,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                     {showFullContent && (
                         <div className="grid md:grid-cols-2 gap-6">
                             <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
-                                <IngredientList ingredients={recipe.ingredients || ""} />
+                                <IngredientList ingredients={recipe.ingredients || ""} scale={scale} setScale={setScale} />
                             </div>
                             <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
                                 <h3 className="text-xl font-serif font-bold text-stone-900 mb-4 border-b border-stone-100 pb-2">Instructions</h3>

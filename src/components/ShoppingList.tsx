@@ -7,10 +7,11 @@ import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUti
 
 interface ShoppingListProps {
     initialList: string;
+    scale: number;
+    setScale: (s: number) => void;
 }
 
-export default function ShoppingList({ initialList }: ShoppingListProps) {
-    const [scale, setScale] = useState(1);
+export default function ShoppingList({ initialList, scale, setScale }: ShoppingListProps) {
     const [items, setItems] = useState<ParsedItem[]>([]);
     const [showCopied, setShowCopied] = useState(false);
 
@@ -39,23 +40,37 @@ export default function ShoppingList({ initialList }: ShoppingListProps) {
     };
 
     const handleCopy = () => {
-        const linesToCopy = items
-            .filter(item => item.isChecked)
-            .map(item => {
-                let text = item.name;
-                if (item.quantity !== null) {
-                    text = `${formatQuantity(item.quantity * scale)} ${item.name}`;
-                }
-                // Apple Notes checklist format
-                return `- [ ] ${text}`;
-            });
+        const textLines: string[] = [];
+        const htmlLines: string[] = [];
 
-        navigator.clipboard.writeText(linesToCopy.join('\n'))
-            .then(() => {
+        items.filter(item => item.isChecked).forEach(item => {
+            let text = item.name;
+            if (item.quantity !== null) {
+                text = `${formatQuantity(item.quantity * scale)} ${item.name}`;
+            }
+            textLines.push(`- [ ] ${text}`);
+            htmlLines.push(`<li><input type="checkbox" /> ${text}</li>`);
+        });
+
+        const textStr = textLines.join('\n');
+        const htmlStr = `<ul class="checklist" style="list-style-type: none; padding: 0;">\n${htmlLines.join('\n')}\n</ul>`;
+
+        const clipboardItem = new ClipboardItem({
+            'text/plain': new Blob([textStr], { type: 'text/plain' }),
+            'text/html': new Blob([htmlStr], { type: 'text/html' })
+        });
+
+        navigator.clipboard.write([clipboardItem]).then(() => {
+            setShowCopied(true);
+            setTimeout(() => setShowCopied(false), 2000);
+        }).catch(err => {
+            console.error("Failed to copy richly:", err);
+            // Fallback
+            navigator.clipboard.writeText(textStr).then(() => {
                 setShowCopied(true);
                 setTimeout(() => setShowCopied(false), 2000);
-            })
-            .catch(err => console.error("Failed to copy:", err));
+            });
+        });
     };
 
     if (!items.length) return <div className="text-stone-400 italic">No items found.</div>;

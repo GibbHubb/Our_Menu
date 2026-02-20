@@ -8,6 +8,7 @@ import MasonryGrid from "./MasonryGrid";
 import AddRecipeModal from "./AddRecipeModal";
 import EditRecipeModal from "./EditRecipeModal";
 import DecisionMaker from "./DecisionMaker";
+import ChatAgent from "./ChatAgent";
 import { Plus, Wand2, Database } from "lucide-react";
 import { INITIAL_RECIPES } from "@/lib/initialData";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -80,7 +81,11 @@ function MenuContent() {
             ? true
             : (selectedCategory === "All" || recipe.category.includes(selectedCategory));
 
-        return matchesCategory && matchesSearch;
+        // Explicitly hide any legacy recipes in "Back Burner" category unless we searched for something
+        const isBackBurner = recipe.category.some(c => c.toLowerCase().includes("back burner"));
+        const hideBackBurner = isBackBurner && !searchTerm && selectedCategory === "All";
+
+        return matchesCategory && matchesSearch && !hideBackBurner;
     });
 
     // Add Recipe Handler
@@ -230,6 +235,8 @@ function MenuContent() {
                 onClose={() => setIsDecisionOpen(false)}
                 recipes={filteredRecipes}
             />
+
+            <ChatAgent />
         </div>
     );
 }

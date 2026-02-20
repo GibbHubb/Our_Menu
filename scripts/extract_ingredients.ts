@@ -188,7 +188,9 @@ async function fetchAndParseRecipe(url: string, title: string): Promise<{ ingred
         }
 
         // 2. Enriched with LLM (for categories AND ingredients if missing)
-        return await enrichWithLLM(url, html, extractedIngredients, title);
+        // return await enrichWithLLM(url, html, extractedIngredients, title);
+        const ingredients = extractedIngredients || await extractWithLLM(url, html) || [];
+        return { ingredients, categories: [] };
 
     } catch (error) {
         console.error(`Error processing ${url}:`, error);
@@ -252,7 +254,7 @@ async function main() {
                 const currentCats = Array.isArray(recipe.category) ? recipe.category : [];
                 const merged = Array.from(new Set([...currentCats, ...categories]));
                 // Filter to only ALLOWED one (LLM might hallucinate)
-                const validMerged = merged.filter(c => ALLOWED_CATEGORIES.includes(c));
+                const validMerged = merged;
 
                 if (validMerged.length > 0) {
                     updates.category = validMerged;

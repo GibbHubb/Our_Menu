@@ -51,11 +51,11 @@ export const formatQuantity = (num: number): string => {
 };
 
 export const cleanIngredientLine = (line: string): string => {
-    // Remove [ ] or [] or - [ ] at the start, and bullet points
+    // Remove [ ] or [] or - [ ] anywhere in the string, and bullet points at the start
     return line
-        .replace(/^\[\s*\]\s*/, '') // [ ]
-        .replace(/^-\s*\[\s*\]\s*/, '') // - [ ]
-        .replace(/^[-*•]\s*/, '') // - or * or •
+        .replace(/\[\s*\]/g, '') // remove all empty brackets like [ ] or []
+        .replace(/^-\s*/, '')    // remove leading hyphen
+        .replace(/^[*•]\s*/, '') // remove bullet points
         .trim();
 };
 

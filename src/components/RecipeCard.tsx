@@ -39,6 +39,7 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
             exit={{ opacity: 0, scale: 0.9 }}
             transition={{ duration: 0.2 }}
             className="break-inside-avoid mb-4 inline-block w-full"
+            style={{ transform: "translateZ(0)" }}
         >
             <Link
                 href={`/recipe/${recipe.id}`}
