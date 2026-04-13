@@ -61,13 +61,21 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                         </div>
                     )}
 
-                    {/* Category Tag Overlay */}
-                    <div className="absolute top-3 left-3 flex flex-wrap gap-1 max-w-[80%]">
-                        {recipe.category.map((cat) => (
-                            <span key={cat} className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${getCategoryColor(cat)} shadow-sm`}>
+                    {/* Category Tag Overlay — cap at 2 visible badges, "+N" for the rest */}
+                    <div className="absolute top-3 left-3 flex flex-nowrap gap-1 max-w-[60%]">
+                        {recipe.category.slice(0, 2).map((cat) => (
+                            <span key={cat} className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${getCategoryColor(cat)} shadow-sm whitespace-nowrap`}>
                                 {cat}
                             </span>
                         ))}
+                        {recipe.category.length > 2 && (
+                            <span
+                                title={recipe.category.slice(2).join(", ")}
+                                className="px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-white/85 text-stone-700 shadow-sm whitespace-nowrap"
+                            >
+                                +{recipe.category.length - 2}
+                            </span>
+                        )}
                     </div>
 
                     <div className="absolute top-3 right-3 flex gap-2">
@@ -96,8 +104,8 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                 </div>
 
                 {/* Content */}
-                <div className="p-4 flex flex-col gap-2">
-                    <h3 className="font-serif text-lg leading-tight text-stone-900 group-hover:text-amber-700 transition-colors">
+                <div className="p-4 flex flex-col gap-2 min-h-[3.5rem]">
+                    <h3 className="font-serif text-lg leading-tight text-stone-900 group-hover:text-amber-700 transition-colors line-clamp-2">
                         {recipe.title}
                     </h3>
                 </div>

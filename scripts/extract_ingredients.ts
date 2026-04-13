@@ -2,6 +2,11 @@
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
+import {
+    fetchAndParseRecipe,
+    ingredientsToShoppingList,
+    instructionsToText,
+} from '../src/lib/recipeExtractor';
 
 // --- Environment Variable Loading ---
 // Simple .env parser to avoid adding 'dotenv' dependency
@@ -49,10 +54,14 @@ interface Recipe {
 }
 
 // --- Main Logic ---
+// Extraction lifted to src/lib/recipeExtractor.ts so the API route + this
+// batch script share one implementation. The legacy in-file helpers below
+// are kept temporarily for reference but are no longer called.
 
-// --- LLM Helper ---
+// --- LLM Helper (DEPRECATED — kept for reference; main() uses fetchAndParseRecipe) ---
 
-async function extractWithLLM(url: string, html: string): Promise<string[] | null> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _legacyExtractWithLLM(url: string, html: string): Promise<string[] | null> {
     try {
         console.log(` Attempting LLM extraction for ${url}...`);
 
@@ -135,7 +144,8 @@ ${textContent}
     }
 }
 
-async function fetchAndParseRecipe(url: string, title: string): Promise<{ ingredients: string[], categories: string[] } | null> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _legacyFetchAndParseRecipe(url: string, title: string): Promise<{ ingredients: string[], categories: string[] } | null> {
     try {
         console.log(`Fetching ${url}...`);
         const response = await fetch(url);
@@ -188,8 +198,8 @@ async function fetchAndParseRecipe(url: string, title: string): Promise<{ ingred
         }
 
         // 2. Enriched with LLM (for categories AND ingredients if missing)
-        // return await enrichWithLLM(url, html, extractedIngredients, title);
-        const ingredients = extractedIngredients || await extractWithLLM(url, html) || [];
+        // (legacy stub; no longer reachable — kept for reference)
+        const ingredients = extractedIngredients || [];
         return { ingredients, categories: [] };
 
     } catch (error) {
@@ -226,54 +236,32 @@ async function main() {
     console.log(`Found ${recipes.length} recipes with links.`);
 
     for (const recipe of recipes) {
-        // Skip if we already have a robust shopping list AND complex categories?
-        // Actually, user wants to apply tags.
-        // Let's re-process all.
-
         console.log(`Processing "${recipe.title}" (${recipe.link})`);
 
-        const result = await fetchAndParseRecipe(recipe.link, recipe.title);
+        const result = await fetchAndParseRecipe(recipe.link);
+        const { ingredients, instructions, sourcePath, warnings } = result;
 
-        if (result) {
-            const { ingredients, categories } = result;
+        if (warnings.length) console.warn("  warnings:", warnings.join("; "));
 
-            // Prepare update object
-            const updates: any = {};
+        const updates: Record<string, string> = {};
+        if ((!recipe.shopping_list || recipe.shopping_list.length < 10) && ingredients.length) {
+            updates.shopping_list = ingredientsToShoppingList(ingredients);
+        }
+        if (instructions.length) {
+            // Only fill if blank — preserve user-edited instructions.
+            // (The script doesn't fetch `instructions`/`ingredients` columns so we conservatively
+            // skip; if you want overwrite behaviour, add those to the SELECT above.)
+        }
 
-            // Update shopping list if it was empty
-            if ((!recipe.shopping_list || recipe.shopping_list.length < 10) && ingredients.length > 0) {
-                updates.shopping_list = ingredients.map(i => `- [ ] ${i}`).join('\n');
-            }
-
-            // Update categories if we found new ones
-            // We'll merge with existing unique ones, or just replace?
-            // User said "apply the multiple tags". Replacing is probably cleaner if the current one is just "Mains" or "Want to Cook".
-            // Let's merge unique.
-            if (categories && categories.length > 0) {
-                // Ensure current isn't null
-                const currentCats = Array.isArray(recipe.category) ? recipe.category : [];
-                const merged = Array.from(new Set([...currentCats, ...categories]));
-                // Filter to only ALLOWED one (LLM might hallucinate)
-                const validMerged = merged;
-
-                if (validMerged.length > 0) {
-                    updates.category = validMerged;
-                }
-            }
-
-            if (Object.keys(updates).length > 0) {
-                const { error: updateError } = await supabase
-                    .from('recipes')
-                    .update(updates)
-                    .eq('id', recipe.id);
-
-                if (updateError) console.error(`Failed to update ${recipe.title}:`, updateError);
-                else console.log(`✅ Updated "${recipe.title}"`, updates);
-            } else {
-                console.log(`No updates needed for "${recipe.title}"`);
-            }
+        if (Object.keys(updates).length > 0) {
+            const { error: updateError } = await supabase
+                .from('recipes')
+                .update(updates)
+                .eq('id', recipe.id);
+            if (updateError) console.error(`Failed to update ${recipe.title}:`, updateError);
+            else console.log(`✅ Updated "${recipe.title}" (via ${sourcePath})`, Object.keys(updates));
         } else {
-            console.log(`Could not enrich "${recipe.title}"`);
+            console.log(`No updates needed for "${recipe.title}" (path: ${sourcePath})`);
         }
 
         // Polite delay

@@ -4,7 +4,7 @@ import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Recipe } from "@/lib/types";
 import { CATEGORIES } from "@/lib/constants";
-import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Edit2, Save, MoreHorizontal, Pencil, Copy, Check } from "lucide-react";
+import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Edit2, Save, MoreHorizontal, Pencil, Copy, Check, Sparkles, Loader2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -27,6 +27,11 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
     const [shoppingList, setShoppingList] = useState("");
     const [isEditingShoppingList, setIsEditingShoppingList] = useState(false);
     const [scale, setScale] = useState(1);
+
+    // Extract Recipe state (M1)
+    const [extracting, setExtracting] = useState(false);
+    const [extractError, setExtractError] = useState<string | null>(null);
+    const [extractInfo, setExtractInfo] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchRecipe = async () => {
@@ -85,6 +90,44 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
         const updated = { ...recipe, notes };
         await handleUpdateRecipe(updated);
         setIsEditingNotes(false);
+    };
+
+    const handleExtractRecipe = async () => {
+        if (!recipe) return;
+        setExtracting(true);
+        setExtractError(null);
+        setExtractInfo(null);
+        try {
+            const res = await fetch(`/api/recipes/${recipe.id}/extract`, { method: "POST" });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+                const warn = Array.isArray(data.warnings) ? data.warnings.join(" ") : "";
+                setExtractError(
+                    [data.error || `HTTP ${res.status}`, warn].filter(Boolean).join(" — ")
+                );
+                return;
+            }
+            const updatedRecipe = data.recipe as Recipe;
+            setRecipe(updatedRecipe);
+            setShoppingList(updatedRecipe.shopping_list || "");
+            const fields: string[] = data.updated || [];
+            const path: string = data.sourcePath || "";
+            if (fields.length === 0) {
+                setExtractInfo("Recipe already had content — nothing was overwritten.");
+            } else {
+                const partial = ["ingredients", "instructions", "shopping_list"].filter(
+                    (f) => !fields.includes(f),
+                );
+                const tail = partial.length ? ` (still missing: ${partial.join(", ")})` : "";
+                setExtractInfo(
+                    `Filled ${fields.join(", ")} via ${path}${tail}.`,
+                );
+            }
+        } catch (e: unknown) {
+            setExtractError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setExtracting(false);
+        }
     };
 
     const handleSaveShoppingList = async () => {
@@ -169,6 +212,61 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
 
                 {/* Main Content */}
                 <div className="p-6 space-y-8">
+
+                    {/* Extract Recipe — only when all three content fields are empty AND we have a link */}
+                    {hasExternalLink &&
+                     !recipe.ingredients?.trim() &&
+                     !recipe.instructions?.trim() &&
+                     !recipe.shopping_list?.trim() && (
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 className="font-serif text-lg font-bold text-amber-900 flex items-center gap-2">
+                                        <Sparkles className="w-5 h-5 text-amber-600" />
+                                        Extract Recipe
+                                    </h3>
+                                    <p className="text-sm text-amber-900/80 mt-1">
+                                        This recipe doesn't have ingredients, instructions or a shopping list yet.
+                                        Pull them automatically from the source page.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleExtractRecipe}
+                                    disabled={extracting}
+                                    className="shrink-0 inline-flex items-center gap-2 bg-amber-600 text-white font-bold px-4 py-2 rounded-xl shadow-sm hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    {extracting ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Extracting…
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="w-4 h-4" />
+                                            Extract
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                            {extractError && (
+                                <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-800">
+                                    <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                                    <span>{extractError}</span>
+                                    <button
+                                        onClick={handleExtractRecipe}
+                                        className="ml-auto text-red-700 underline hover:no-underline"
+                                    >
+                                        Try again
+                                    </button>
+                                </div>
+                            )}
+                            {extractInfo && !extractError && (
+                                <div className="rounded-lg bg-white/80 border border-amber-200 px-3 py-2 text-sm text-stone-700">
+                                    {extractInfo}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* External Link CTA */}
                     {hasExternalLink && (
