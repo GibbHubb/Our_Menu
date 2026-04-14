@@ -16,7 +16,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
-    fetchAndParseRecipe,
+    extractJsonLdOnly,
     ingredientsToShoppingList,
     instructionsToText,
 } from "@/lib/recipeExtractor";
@@ -68,7 +68,8 @@ export async function POST(
 
     let extracted;
     try {
-        extracted = await fetchAndParseRecipe(recipe.link);
+        // Use JSON-LD-only path — safe for Vercel (no LAN LLM dependency).
+        extracted = await extractJsonLdOnly(recipe.link);
     } catch (e: unknown) {
         return NextResponse.json(
             { ok: false, error: e instanceof Error ? e.message : String(e) },

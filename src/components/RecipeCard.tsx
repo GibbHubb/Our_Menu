@@ -56,8 +56,8 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                             loading="lazy"
                         />
                     ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-stone-100">
-                            <span className="text-3xl opacity-20 filter grayscale">🍽️</span>
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-stone-100 to-stone-200">
+                            <span className="text-4xl opacity-25 filter grayscale select-none">🍽️</span>
                         </div>
                     )}
 

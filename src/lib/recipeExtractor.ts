@@ -213,6 +213,56 @@ ${text}`;
 // Public API — used by both the script and the route
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * JSON-LD-only extraction — no LLM call.
+ * Safe for serverless / Vercel environments where the LAN LLM is unreachable.
+ * Returns sourcePath "none" (with a warning) when JSON-LD is absent.
+ */
+export async function extractJsonLdOnly(url: string): Promise<ExtractedRecipe> {
+    let html = "";
+    try {
+        const resp = await fetch(url, {
+            headers: {
+                "User-Agent":
+                    "Mozilla/5.0 (compatible; MaxBronMenu/1.0; +https://github.com/GibbHubb/Our_Menu)",
+            },
+        });
+        if (!resp.ok) {
+            return {
+                ingredients: [],
+                instructions: [],
+                sourcePath: "none",
+                warnings: [`Source returned HTTP ${resp.status}`],
+            };
+        }
+        html = await resp.text();
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return {
+            ingredients: [],
+            instructions: [],
+            sourcePath: "none",
+            warnings: [`Could not fetch source URL: ${msg}`],
+        };
+    }
+
+    const { ingredients, instructions } = tryJsonLd(html);
+    if (!ingredients.length && !instructions.length) {
+        return {
+            ingredients: [],
+            instructions: [],
+            sourcePath: "none",
+            warnings: ["No JSON-LD Recipe block found on this page."],
+        };
+    }
+    return {
+        ingredients,
+        instructions,
+        sourcePath: "json-ld",
+        warnings: [],
+    };
+}
+
 export async function fetchAndParseRecipe(url: string): Promise<ExtractedRecipe> {
     const warnings: string[] = [];
 

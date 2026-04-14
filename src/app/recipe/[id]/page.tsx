@@ -32,6 +32,9 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
     const [extracting, setExtracting] = useState(false);
     const [extractError, setExtractError] = useState<string | null>(null);
     const [extractInfo, setExtractInfo] = useState<string | null>(null);
+    const [showPasteFallback, setShowPasteFallback] = useState(false);
+    const [pasteText, setPasteText] = useState("");
+    const [savingPaste, setSavingPaste] = useState(false);
 
     useEffect(() => {
         const fetchRecipe = async () => {
@@ -97,10 +100,16 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
         setExtracting(true);
         setExtractError(null);
         setExtractInfo(null);
+        setShowPasteFallback(false);
         try {
             const res = await fetch(`/api/recipes/${recipe.id}/extract`, { method: "POST" });
             const data = await res.json();
             if (!res.ok || !data.ok) {
+                // 422 = extractor returned nothing (JSON-LD missing) → offer paste fallback
+                if (res.status === 422) {
+                    setShowPasteFallback(true);
+                    return;
+                }
                 const warn = Array.isArray(data.warnings) ? data.warnings.join(" ") : "";
                 setExtractError(
                     [data.error || `HTTP ${res.status}`, warn].filter(Boolean).join(" — ")
@@ -119,15 +128,24 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                     (f) => !fields.includes(f),
                 );
                 const tail = partial.length ? ` (still missing: ${partial.join(", ")})` : "";
-                setExtractInfo(
-                    `Filled ${fields.join(", ")} via ${path}${tail}.`,
-                );
+                setExtractInfo(`Filled ${fields.join(", ")} via ${path}${tail}.`);
             }
         } catch (e: unknown) {
             setExtractError(e instanceof Error ? e.message : String(e));
         } finally {
             setExtracting(false);
         }
+    };
+
+    const handleSavePaste = async () => {
+        if (!recipe || !pasteText.trim()) return;
+        setSavingPaste(true);
+        const updated = { ...recipe, ingredients: pasteText.trim() };
+        await handleUpdateRecipe(updated);
+        setShowPasteFallback(false);
+        setPasteText("");
+        setSavingPaste(false);
+        setExtractInfo("Saved pasted text to ingredients.");
     };
 
     const handleSaveShoppingList = async () => {
@@ -258,6 +276,37 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                                     >
                                         Try again
                                     </button>
+                                </div>
+                            )}
+                            {/* Paste fallback — shown when page has no JSON-LD */}
+                            {showPasteFallback && (
+                                <div className="rounded-xl border border-stone-200 bg-white p-4 space-y-3">
+                                    <p className="text-sm text-stone-600">
+                                        No structured data found on this page. Paste the recipe text below and we'll save it as ingredients.
+                                    </p>
+                                    <textarea
+                                        value={pasteText}
+                                        onChange={(e) => setPasteText(e.target.value)}
+                                        placeholder={"- 200g pasta\n- 2 cloves garlic\n..."}
+                                        rows={6}
+                                        className="w-full p-3 text-sm bg-stone-50 border border-stone-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                        autoFocus
+                                    />
+                                    <div className="flex gap-2 justify-end">
+                                        <button
+                                            onClick={() => setShowPasteFallback(false)}
+                                            className="text-sm px-3 py-1.5 text-stone-500 hover:text-stone-800"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={handleSavePaste}
+                                            disabled={savingPaste || !pasteText.trim()}
+                                            className="text-sm px-4 py-1.5 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {savingPaste ? "Saving…" : "Save"}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                             {extractInfo && !extractError && (
