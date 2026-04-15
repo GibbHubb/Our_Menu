@@ -11,6 +11,7 @@ import Image from "next/image";
 import EditRecipeModal from "@/components/EditRecipeModal";
 import ShoppingListComp from "@/components/ShoppingList";
 import IngredientList from "@/components/IngredientList";
+import { ReceiptScanner } from "@/components/ReceiptScanner";
 
 export default function RecipePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -377,6 +378,18 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                                 ) : (
                                     <p className="text-stone-400 italic">No items in shopping list.</p>
                                 )}
+                                <ReceiptScanner
+                                    onAddItems={(newItems) => {
+                                        const updated = [shoppingList, ...newItems]
+                                            .filter(Boolean)
+                                            .join('\n');
+                                        setShoppingList(updated);
+                                        if (recipe) {
+                                            const updatedRecipe = { ...recipe, shopping_list: updated };
+                                            handleUpdateRecipe(updatedRecipe);
+                                        }
+                                    }}
+                                />
                             </div>
                         )}
                     </div>

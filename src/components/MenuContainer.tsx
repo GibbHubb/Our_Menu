@@ -9,7 +9,7 @@ import AddRecipeModal from "./AddRecipeModal";
 import EditRecipeModal from "./EditRecipeModal";
 import DecisionMaker from "./DecisionMaker";
 import ChatAgent from "./ChatAgent";
-import { Plus, Wand2, Database } from "lucide-react";
+import { Plus, Wand2, Database, Sparkles, X } from "lucide-react";
 import { INITIAL_RECIPES } from "@/lib/initialData";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -22,6 +22,12 @@ function MenuContent() {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Semantic search state (OM1)
+    const [semanticQuery, setSemanticQuery] = useState('');
+    const [semanticResults, setSemanticResults] = useState<Recipe[] | null>(null);
+    const [semanticLoading, setSemanticLoading] = useState(false);
+    const [semanticError, setSemanticError] = useState('');
 
     const initialCategory = (searchParams.get("category") as Category) || "All";
     const initialSearch = searchParams.get("search") || "";
@@ -46,6 +52,29 @@ function MenuContent() {
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
     const [detailRecipe, setDetailRecipe] = useState<Recipe | null>(null);
+
+    // Semantic search handler (OM1)
+    const handleSemanticSearch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!semanticQuery.trim()) { setSemanticResults(null); return; }
+        setSemanticLoading(true);
+        setSemanticError('');
+        try {
+            const res = await fetch('/api/recipes/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: semanticQuery }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            setSemanticResults(data.results ?? []);
+        } catch (e: unknown) {
+            setSemanticError(e instanceof Error ? e.message : String(e));
+            setSemanticResults(null);
+        } finally {
+            setSemanticLoading(false);
+        }
+    };
 
     // Fetch Recipes
     const fetchRecipes = async () => {
@@ -180,14 +209,71 @@ function MenuContent() {
                 onSearchChange={setSearchTerm}
             />
 
-            <main className="max-w-7xl mx-auto pt-6">
+            {/* Semantic Search Bar (OM1) */}
+            <div className="max-w-7xl mx-auto px-4 pt-4">
+                <form onSubmit={handleSemanticSearch} className="flex gap-2">
+                    <div className="relative flex-1">
+                        <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
+                        <input
+                            type="text"
+                            placeholder="Search recipes semantically…"
+                            value={semanticQuery}
+                            onChange={e => { setSemanticQuery(e.target.value); if (!e.target.value) setSemanticResults(null); }}
+                            className="w-full pl-10 pr-4 py-2 bg-white border border-indigo-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-sm"
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={semanticLoading}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-full text-sm font-medium hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+                    >
+                        {semanticLoading ? '…' : 'Search'}
+                    </button>
+                    {semanticResults !== null && (
+                        <button
+                            type="button"
+                            onClick={() => { setSemanticResults(null); setSemanticQuery(''); setSemanticError(''); }}
+                            className="px-3 py-2 bg-stone-200 text-stone-700 rounded-full text-sm hover:bg-stone-300 transition-colors"
+                            title="Clear semantic search"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    )}
+                </form>
+                {semanticError && (
+                    <p className="text-red-600 text-xs mt-1 pl-2">{semanticError}</p>
+                )}
+                {semanticResults !== null && (
+                    <p className="text-xs text-stone-500 mt-1 pl-2">
+                        {semanticResults.length
+                            ? `${semanticResults.length} semantic match${semanticResults.length !== 1 ? 'es' : ''}`
+                            : 'No semantic matches found — showing all recipes below.'}
+                    </p>
+                )}
+                {/* Admin-only: sync embeddings — visible at ?admin=1 */}
+                {searchParams.get('admin') === '1' && (
+                    <button
+                        onClick={async () => {
+                            await fetch('/api/recipes/embed', { method: 'POST' });
+                            alert('Embeddings synced!');
+                        }}
+                        className="mt-2 text-xs px-3 py-1 border border-stone-300 rounded-full text-stone-500 hover:bg-stone-100"
+                    >
+                        Sync embeddings
+                    </button>
+                )}
+            </div>
+
+            <main className="max-w-7xl mx-auto pt-4">
                 {loading ? (
                     <div className="flex justify-center pt-20">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-stone-900"></div>
                     </div>
                 ) : (
                     <MasonryGrid
-                        recipes={filteredRecipes}
+                        recipes={semanticResults !== null && semanticResults.length > 0
+                            ? semanticResults
+                            : filteredRecipes}
                         onSeed={handleSeedData}
                         onReset={handleResetData}
                         onEdit={handleOpenEdit}
