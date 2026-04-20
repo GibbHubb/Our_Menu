@@ -5,11 +5,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseClient';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 export async function POST(req: NextRequest) {
     const { query } = await req.json();
     if (!query) return NextResponse.json({ error: 'query required' }, { status: 400 });
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     // Embed the query
     const embRes = await openai.embeddings.create({
