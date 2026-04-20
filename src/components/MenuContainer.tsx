@@ -275,7 +275,6 @@ function MenuContent() {
                             ? semanticResults
                             : filteredRecipes}
                         onSeed={handleSeedData}
-                        onReset={handleResetData}
                         onEdit={handleOpenEdit}
                         error={error}
                     />

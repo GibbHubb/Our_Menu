@@ -1,18 +1,17 @@
 import { Recipe } from "@/lib/types";
 import RecipeCard from "./RecipeCard";
 import { motion, AnimatePresence } from "framer-motion";
-import { Database, AlertCircle, Trash2 } from "lucide-react";
+import { Database, AlertCircle } from "lucide-react";
 
 interface MasonryGridProps {
     recipes: Recipe[];
     onSeed?: () => void;
-    onReset?: () => void;
     onEdit?: (recipe: Recipe) => void;
     onClick?: (recipe: Recipe) => void;
     error?: string | null;
 }
 
-export default function MasonryGrid({ recipes, onSeed, onReset, onEdit, onClick, error }: MasonryGridProps) {
+export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error }: MasonryGridProps) {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
@@ -50,15 +49,6 @@ export default function MasonryGrid({ recipes, onSeed, onReset, onEdit, onClick,
                             Load Initial Menu
                         </button>
                     )}
-                    {onReset && (
-                        <button
-                            onClick={onReset}
-                            className="px-8 py-3 bg-red-50 text-red-600 rounded-full font-medium hover:bg-red-100 transition-transform active:scale-95 flex items-center gap-2 border border-red-200"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                            Reset Database
-                        </button>
-                    )}
                 </div>
             </div>
         );
@@ -74,18 +64,9 @@ export default function MasonryGrid({ recipes, onSeed, onReset, onEdit, onClick,
                 </AnimatePresence>
             </div>
 
-            {/* Footer / Reset Area */}
+            {/* Footer */}
             <div className="flex flex-col items-center gap-4 pb-12 pt-4 border-t border-stone-100 mt-10">
                 <p className="text-stone-400 text-sm italic">Max & Bron's Digital Menu</p>
-                {onReset && (
-                    <button
-                        onClick={onReset}
-                        className="flex items-center gap-2 text-xs font-semibold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-4 py-2 rounded-full border border-red-100 transition-colors shadow-sm"
-                    >
-                        <Trash2 className="w-3 h-3" />
-                        Clean Slate (Delete All Recipes)
-                    </button>
-                )}
             </div>
         </div>
     );

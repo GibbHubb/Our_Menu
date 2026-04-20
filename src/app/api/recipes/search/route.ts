@@ -9,6 +9,10 @@ export async function POST(req: NextRequest) {
     const { query } = await req.json();
     if (!query) return NextResponse.json({ error: 'query required' }, { status: 400 });
 
+    if (!process.env.OPENAI_API_KEY) {
+        return NextResponse.json({ error: 'Semantic search is not configured (OPENAI_API_KEY missing)' }, { status: 503 });
+    }
+
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     // Embed the query

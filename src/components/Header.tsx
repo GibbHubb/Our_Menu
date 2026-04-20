@@ -1,6 +1,7 @@
 import { Search, ChefHat } from "lucide-react";
 import { Category } from "@/lib/types";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 interface HeaderProps {
     categories: Category[];
@@ -22,14 +23,14 @@ export default function Header({
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-4">
                 {/* Top Row: Logo & Search */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
+                    <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                         <div className="p-2 bg-stone-900 rounded-full">
                             <ChefHat className="w-6 h-6 text-stone-50" />
                         </div>
                         <h1 className="text-2xl font-serif text-stone-900 tracking-tight">
                             Max & Bron
                         </h1>
-                    </div>
+                    </Link>
 
                     <div className="relative w-full md:max-w-md">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
