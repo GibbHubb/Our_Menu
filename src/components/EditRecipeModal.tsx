@@ -146,6 +146,38 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                         />
                     </div>
 
+                    {/* Rating */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Rating</label>
+                        <div className="flex gap-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                    key={star}
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, rating: formData.rating === star ? undefined : star })}
+                                    className="text-2xl transition-transform hover:scale-110"
+                                >
+                                    {(formData.rating ?? 0) >= star ? '\u2605' : '\u2606'}
+                                </button>
+                            ))}
+                            {formData.rating && (
+                                <span className="ml-2 text-sm text-stone-400 self-center">{formData.rating}/5</span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Notes */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Notes</label>
+                        <textarea
+                            rows={2}
+                            placeholder="e.g. Add more garlic next time..."
+                            value={formData.notes || ""}
+                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                            className="w-full p-3 bg-stone-50 rounded-xl border-none focus:ring-2 focus:ring-amber-500 font-sans text-sm"
+                        />
+                    </div>
+
                     {/* Ingredients */}
                     <div className="space-y-2">
                         <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Ingredients</label>

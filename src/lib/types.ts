@@ -11,4 +11,6 @@ export interface Recipe {
     instructions?: string;
     notes?: string;
     shopping_list?: string;
+    rating?: number;                                // OM5: 1-5 star rating
+    shopping_list_checked?: Record<string, boolean>; // OM6: per-item checked state
 }

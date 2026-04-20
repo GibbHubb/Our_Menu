@@ -1,38 +1,88 @@
 
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Check, Copy } from "lucide-react";
 import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
+import { supabase } from "@/lib/supabaseClient";
 
 interface ShoppingListProps {
     initialList: string;
     scale: number;
     setScale: (s: number) => void;
+    recipeId?: string;
+    checkedMap?: Record<string, boolean>;
 }
 
-export default function ShoppingList({ initialList, scale, setScale }: ShoppingListProps) {
+export default function ShoppingList({ initialList, scale, setScale, recipeId, checkedMap }: ShoppingListProps) {
     const [items, setItems] = useState<ParsedItem[]>([]);
     const [showCopied, setShowCopied] = useState(false);
+    const [checked, setChecked] = useState<Record<string, boolean>>(checkedMap ?? {});
 
-    // Initial parsing
+    // Parse items from the ingredient list
     useEffect(() => {
         if (!initialList) {
             setItems([]);
             return;
         }
-
         const lines = initialList.split('\n').filter(line => line.trim().length > 0);
         const parsed: ParsedItem[] = lines.map((line, idx) => parseIngredientLine(line, idx));
-
         setItems(parsed);
     }, [initialList]);
 
-    const handleToggle = (id: string) => {
-        setItems(prev => prev.map(item =>
-            item.id === id ? { ...item, isChecked: !item.isChecked } : item
-        ));
-    };
+    // Initialise checked state from prop
+    useEffect(() => {
+        if (checkedMap) setChecked(checkedMap);
+    }, [checkedMap]);
+
+    // OM6 — Supabase Realtime subscription for shared checked state
+    useEffect(() => {
+        if (!recipeId) return;
+
+        const channel = supabase
+            .channel(`shopping-${recipeId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'recipes',
+                    filter: `id=eq.${recipeId}`,
+                },
+                (payload) => {
+                    const newChecked = (payload.new as Record<string, unknown>).shopping_list_checked;
+                    if (newChecked && typeof newChecked === 'object') {
+                        setChecked(newChecked as Record<string, boolean>);
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [recipeId]);
+
+    // Normalise key for the checked map (trim + lowercase)
+    const checkedKey = (name: string) => name.trim().toLowerCase();
+
+    const handleToggle = useCallback((item: ParsedItem) => {
+        const key = checkedKey(item.name);
+        const newVal = !checked[key];
+        const updated = { ...checked, [key]: newVal };
+        setChecked(updated);
+
+        // Persist to Supabase (optimistic — local state already updated)
+        if (recipeId) {
+            supabase
+                .from('recipes')
+                .update({ shopping_list_checked: updated })
+                .eq('id', recipeId)
+                .then(({ error }) => {
+                    if (error) console.error('Failed to sync checked state:', error);
+                });
+        }
+    }, [checked, recipeId]);
 
     const handleScale = (newScale: number) => {
         if (newScale < 0.5) return;
@@ -43,7 +93,7 @@ export default function ShoppingList({ initialList, scale, setScale }: ShoppingL
         const textLines: string[] = [];
         const htmlLines: string[] = [];
 
-        items.filter(item => item.isChecked).forEach(item => {
+        items.filter(item => checked[checkedKey(item.name)]).forEach(item => {
             let text = item.name;
             if (item.quantity !== null) {
                 text = `${formatQuantity(item.quantity * scale)} ${item.name}`;
@@ -65,7 +115,6 @@ export default function ShoppingList({ initialList, scale, setScale }: ShoppingL
             setTimeout(() => setShowCopied(false), 2000);
         }).catch(err => {
             console.error("Failed to copy richly:", err);
-            // Fallback
             navigator.clipboard.writeText(textStr).then(() => {
                 setShowCopied(true);
                 setTimeout(() => setShowCopied(false), 2000);
@@ -121,33 +170,33 @@ export default function ShoppingList({ initialList, scale, setScale }: ShoppingL
             {/* List */}
             <div className="space-y-2">
                 {items.map((item) => {
-                    // Calculate display quantity
                     const displayQty = item.quantity !== null
                         ? formatQuantity(item.quantity * scale)
                         : null;
+                    const isChecked = !!checked[checkedKey(item.name)];
 
                     return (
                         <div
                             key={item.id}
-                            onClick={() => handleToggle(item.id)}
+                            onClick={() => handleToggle(item)}
                             className={`
                                 cursor-pointer group flex items-start gap-3 p-3 rounded-lg transition-colors select-none
-                                ${item.isChecked ? 'bg-emerald-50/50 border-emerald-100' : 'bg-white hover:bg-stone-50 border-transparent'}
+                                ${isChecked ? 'bg-emerald-50/50 border-emerald-100' : 'bg-white hover:bg-stone-50 border-transparent'}
                                 border
                             `}
                         >
                             <div className={`
                                 flex-shrink-0 mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors
-                                ${item.isChecked
+                                ${isChecked
                                     ? 'bg-emerald-500 border-emerald-500 text-white'
                                     : 'bg-white border-stone-300 group-hover:border-emerald-400'}
                             `}>
-                                {item.isChecked && <Check className="w-3.5 h-3.5" />}
+                                {isChecked && <Check className="w-3.5 h-3.5" />}
                             </div>
 
-                            <div className={`flex-1 text-sm leading-snug ${item.isChecked ? 'text-stone-900' : 'text-stone-500'}`}>
+                            <div className={`flex-1 text-sm leading-snug ${isChecked ? 'text-stone-900' : 'text-stone-500'}`}>
                                 {displayQty && <span className="font-bold mr-1.5">{displayQty}</span>}
-                                <span className={item.isChecked ? '' : 'line-through opacity-70'}>
+                                <span className={isChecked ? '' : 'line-through opacity-70'}>
                                     {item.name}
                                 </span>
                                 {item.isStandard && (

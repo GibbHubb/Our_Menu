@@ -374,7 +374,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                         ) : (
                             <div className="mt-2">
                                 {shoppingList ? (
-                                    <ShoppingListComp initialList={shoppingList} scale={scale} setScale={setScale} />
+                                    <ShoppingListComp initialList={shoppingList} scale={scale} setScale={setScale} recipeId={recipe?.id} checkedMap={recipe?.shopping_list_checked} />
                                 ) : (
                                     <p className="text-stone-400 italic">No items in shopping list.</p>
                                 )}

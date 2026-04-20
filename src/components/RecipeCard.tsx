@@ -108,6 +108,15 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                     <h3 className="font-serif text-lg leading-tight text-stone-900 group-hover:text-amber-700 transition-colors line-clamp-2">
                         {recipe.title}
                     </h3>
+                    {recipe.rating && (
+                        <div className="flex gap-0.5 text-sm">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                                <span key={s} className={s <= recipe.rating! ? 'text-amber-400' : 'text-stone-200'}>
+                                    {'\u2605'}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </Link>
         </motion.div>

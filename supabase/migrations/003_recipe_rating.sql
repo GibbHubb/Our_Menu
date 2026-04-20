@@ -1,0 +1,4 @@
+-- OM5: Recipe rating & notes
+ALTER TABLE recipes
+  ADD COLUMN IF NOT EXISTS rating INTEGER CHECK (rating BETWEEN 1 AND 5),
+  ADD COLUMN IF NOT EXISTS notes TEXT;

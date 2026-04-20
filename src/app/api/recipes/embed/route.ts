@@ -6,9 +6,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseClient';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 export async function POST(_req: NextRequest) {
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     // Fetch all recipes
     const { data: recipes, error } = await supabase
         .from('recipes')

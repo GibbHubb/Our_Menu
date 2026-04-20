@@ -1,5 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import type { Recipe } from '@/lib/types';
 
 interface PlanDay {
     day: number;
@@ -18,9 +20,20 @@ export default function MealPlanPage() {
     const [dietary, setDietary] = useState('none');
     const [days, setDays] = useState(7);
     const [plan, setPlan] = useState<MealPlan | null>(null);
+    const [planRecipes, setPlanRecipes] = useState<Recipe[]>([]);
     const [loading, setLoading] = useState(false);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState('');
+
+    // Fetch recipes for matched plan days (for PDF shopping list)
+    useEffect(() => {
+        if (!plan) { setPlanRecipes([]); return; }
+        const ids = plan.days.map(d => d.recipe_id).filter(Boolean) as string[];
+        if (ids.length === 0) { setPlanRecipes([]); return; }
+        supabase.from('recipes').select('*').in('id', ids).then(({ data }) => {
+            setPlanRecipes((data as Recipe[]) ?? []);
+        });
+    }, [plan]);
 
     async function generate() {
         setLoading(true);
@@ -51,6 +64,12 @@ export default function MealPlanPage() {
             body: JSON.stringify({ plan, preferences: { pantry, dietary, days } }),
         });
         setSaved(true);
+    }
+
+    async function handleDownloadPDF() {
+        if (!plan) return;
+        const { buildMealPlanPDF } = await import('@/lib/exportPDF');
+        await buildMealPlanPDF(plan, planRecipes);
     }
 
     return (
@@ -101,7 +120,7 @@ export default function MealPlanPage() {
                         opacity: loading ? 0.7 : 1,
                     }}
                 >
-                    {loading ? 'Generating…' : 'Generate Meal Plan'}
+                    {loading ? 'Generating...' : 'Generate Meal Plan'}
                 </button>
             </div>
 
@@ -149,7 +168,7 @@ export default function MealPlanPage() {
                                         href={`/recipe/${d.recipe_id}`}
                                         style={{ fontSize: '12px', color: '#4f46e5', textDecoration: 'none' }}
                                     >
-                                        View recipe →
+                                        View recipe &rarr;
                                     </a>
                                 )}
                                 {d.reason && (
@@ -160,22 +179,39 @@ export default function MealPlanPage() {
                             </div>
                         ))}
                     </div>
-                    <button
-                        onClick={savePlan}
-                        disabled={saved}
-                        style={{
-                            padding: '8px 20px',
-                            background: saved ? '#22c55e' : '#374151',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: saved ? 'default' : 'pointer',
-                            fontSize: '14px',
-                            fontWeight: 600,
-                        }}
-                    >
-                        {saved ? '✓ Saved' : 'Save Plan'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            onClick={savePlan}
+                            disabled={saved}
+                            style={{
+                                padding: '8px 20px',
+                                background: saved ? '#22c55e' : '#374151',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: saved ? 'default' : 'pointer',
+                                fontSize: '14px',
+                                fontWeight: 600,
+                            }}
+                        >
+                            {saved ? '\u2713 Saved' : 'Save Plan'}
+                        </button>
+                        <button
+                            onClick={handleDownloadPDF}
+                            style={{
+                                padding: '8px 20px',
+                                background: '#4f46e5',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                fontWeight: 600,
+                            }}
+                        >
+                            Download PDF
+                        </button>
+                    </div>
                 </>
             )}
         </div>

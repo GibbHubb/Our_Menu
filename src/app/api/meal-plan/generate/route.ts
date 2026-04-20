@@ -10,12 +10,15 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 export async function POST(req: NextRequest) {
     const { pantry, dietary, days } = await req.json();
 
-    // Get recipe titles + categories for context
-    const { data: recipes } = await supabase.from('recipes').select('id, title, category');
+    // Get recipe titles + categories + ratings for context
+    const { data: recipes } = await supabase.from('recipes').select('id, title, category, rating');
     const recipeContext = (recipes ?? [])
         .map(r => {
             const cats = Array.isArray(r.category) ? r.category.join(', ') : r.category;
-            return `- ${r.title}${cats ? ` (${cats})` : ''}`;
+            let line = `- ${r.title}${cats ? ` (${cats})` : ''}`;
+            if (r.rating && r.rating >= 4) line += ` [rated ${r.rating}/5 - preferred]`;
+            else if (r.rating && r.rating <= 2) line += ` [rated ${r.rating}/5 - try to avoid]`;
+            return line;
         })
         .join('\n');
 
