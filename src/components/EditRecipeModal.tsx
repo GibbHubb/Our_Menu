@@ -1,6 +1,13 @@
 import { useState, useEffect } from "react";
 import { Category, Recipe } from "@/lib/types";
 import { X, Loader2, Sparkles } from "lucide-react";
+import {
+    getCollections,
+    getRecipeCollections,
+    addRecipeToCollection,
+    removeRecipeFromCollection,
+    type Collection,
+} from "@/lib/collections";
 
 interface EditRecipeModalProps {
     isOpen: boolean;
@@ -13,6 +20,9 @@ interface EditRecipeModalProps {
 export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, categories }: EditRecipeModalProps) {
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState<Partial<Recipe>>({});
+    // OM9 — collections picker
+    const [collections, setCollections] = useState<Collection[]>([]);
+    const [recipeCollectionIds, setRecipeCollectionIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         if (recipe) {
@@ -22,8 +32,28 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                 instructions: recipe.instructions || "",
                 notes: recipe.notes || ""
             });
+            // Load collections + recipe membership
+            Promise.all([getCollections(), getRecipeCollections(recipe.id)]).then(([cols, mems]) => {
+                setCollections(cols);
+                setRecipeCollectionIds(new Set(mems));
+            });
         }
     }, [recipe]);
+
+    const toggleCollection = async (collectionId: string) => {
+        if (!recipe) return;
+        if (recipeCollectionIds.has(collectionId)) {
+            await removeRecipeFromCollection(collectionId, recipe.id);
+            setRecipeCollectionIds((prev) => {
+                const next = new Set(prev);
+                next.delete(collectionId);
+                return next;
+            });
+        } else {
+            await addRecipeToCollection(collectionId, recipe.id);
+            setRecipeCollectionIds((prev) => new Set(prev).add(collectionId));
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -177,6 +207,32 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                             className="w-full p-3 bg-stone-50 rounded-xl border-none focus:ring-2 focus:ring-amber-500 font-sans text-sm"
                         />
                     </div>
+
+                    {/* OM9 — Collections */}
+                    {collections.length > 0 && (
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Collections</label>
+                            <div className="flex flex-wrap gap-2">
+                                {collections.map((c) => {
+                                    const isIn = recipeCollectionIds.has(c.id);
+                                    return (
+                                        <button
+                                            key={c.id}
+                                            type="button"
+                                            onClick={() => toggleCollection(c.id)}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${
+                                                isIn
+                                                    ? "bg-indigo-600 text-white shadow-md"
+                                                    : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                                            }`}
+                                        >
+                                            {c.name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Ingredients */}
                     <div className="space-y-2">

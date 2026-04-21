@@ -12,7 +12,17 @@ export async function POST(req: NextRequest) {
 
     // Get recipe titles + categories + ratings for context
     const { data: recipes } = await supabase.from('recipes').select('id, title, category, rating');
-    const recipeContext = (recipes ?? [])
+
+    // OM7 — exclude recipes cooked in the last 3 days
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: recentCooks } = await supabase
+        .from('cook_log')
+        .select('recipe_id')
+        .gte('cooked_at', threeDaysAgo);
+    const recentlyCookedIds = new Set((recentCooks ?? []).map((r) => r.recipe_id));
+
+    const availableRecipes = (recipes ?? []).filter((r) => !recentlyCookedIds.has(r.id));
+    const recipeContext = availableRecipes
         .map(r => {
             const cats = Array.isArray(r.category) ? r.category.join(', ') : r.category;
             let line = `- ${r.title}${cats ? ` (${cats})` : ''}`;

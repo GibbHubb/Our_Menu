@@ -9,11 +9,20 @@ import AddRecipeModal from "./AddRecipeModal";
 import EditRecipeModal from "./EditRecipeModal";
 import DecisionMaker from "./DecisionMaker";
 import ChatAgent from "./ChatAgent";
+import CollectionBar from "./CollectionBar";
 import { Plus, Wand2, Database, Sparkles, X } from "lucide-react";
 import { INITIAL_RECIPES } from "@/lib/initialData";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { CATEGORIES } from "@/lib/constants";
+import {
+    getCollections,
+    createCollection,
+    renameCollection as renameCollectionApi,
+    deleteCollection as deleteCollectionApi,
+    getCollectionMemberships,
+    type Collection,
+} from "@/lib/collections";
 
 function MenuContent() {
     const router = useRouter();
@@ -22,6 +31,35 @@ function MenuContent() {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // OM9 — collections
+    const [collections, setCollections] = useState<Collection[]>([]);
+    const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+    const [membershipMap, setMembershipMap] = useState<Record<string, Set<string>>>({});
+
+    const refreshCollections = async () => {
+        const [cols, mems] = await Promise.all([getCollections(), getCollectionMemberships()]);
+        setCollections(cols);
+        setMembershipMap(mems);
+    };
+
+    useEffect(() => {
+        refreshCollections();
+    }, []);
+
+    const handleCreateCollection = async (name: string) => {
+        await createCollection(name);
+        await refreshCollections();
+    };
+    const handleRenameCollection = async (id: string, name: string) => {
+        await renameCollectionApi(id, name);
+        await refreshCollections();
+    };
+    const handleDeleteCollection = async (id: string) => {
+        await deleteCollectionApi(id);
+        if (selectedCollectionId === id) setSelectedCollectionId(null);
+        await refreshCollections();
+    };
 
     // Semantic search state (OM1)
     const [semanticQuery, setSemanticQuery] = useState('');
@@ -114,7 +152,12 @@ function MenuContent() {
         const isBackBurner = recipe.category.some(c => c.toLowerCase().includes("back burner"));
         const hideBackBurner = isBackBurner && !searchTerm && selectedCategory === "All";
 
-        return matchesCategory && matchesSearch && !hideBackBurner;
+        // OM9 — collection filter (applies alongside category/search)
+        const matchesCollection = selectedCollectionId === null
+            ? true
+            : membershipMap[selectedCollectionId]?.has(recipe.id) ?? false;
+
+        return matchesCategory && matchesSearch && !hideBackBurner && matchesCollection;
     });
 
     // Add Recipe Handler
@@ -263,6 +306,16 @@ function MenuContent() {
                     </button>
                 )}
             </div>
+
+            {/* OM9 — Collections filter bar */}
+            <CollectionBar
+                collections={collections}
+                selectedId={selectedCollectionId}
+                onSelect={setSelectedCollectionId}
+                onCreate={handleCreateCollection}
+                onRename={handleRenameCollection}
+                onDelete={handleDeleteCollection}
+            />
 
             <main className="max-w-7xl mx-auto pt-4">
                 {loading ? (

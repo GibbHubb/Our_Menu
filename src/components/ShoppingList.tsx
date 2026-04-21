@@ -2,9 +2,11 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, HelpCircle, Loader2 } from "lucide-react";
 import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
 import { supabase } from "@/lib/supabaseClient";
+
+interface Substitution { name: string; note: string; }
 
 interface ShoppingListProps {
     initialList: string;
@@ -12,12 +14,38 @@ interface ShoppingListProps {
     setScale: (s: number) => void;
     recipeId?: string;
     checkedMap?: Record<string, boolean>;
+    recipeName?: string;
+    recipeIngredients?: string;
 }
 
-export default function ShoppingList({ initialList, scale, setScale, recipeId, checkedMap }: ShoppingListProps) {
+export default function ShoppingList({ initialList, scale, setScale, recipeId, checkedMap, recipeName, recipeIngredients }: ShoppingListProps) {
     const [items, setItems] = useState<ParsedItem[]>([]);
     const [showCopied, setShowCopied] = useState(false);
     const [checked, setChecked] = useState<Record<string, boolean>>(checkedMap ?? {});
+    // OM8 — substitution state per item id
+    const [subs, setSubs] = useState<Record<string, Substitution[]>>({});
+    const [subsLoading, setSubsLoading] = useState<string | null>(null);
+    const [subsError, setSubsError] = useState<Record<string, string>>({});
+
+    const fetchSubstitutions = async (item: ParsedItem) => {
+        if (subsLoading) return;
+        setSubsLoading(item.id);
+        setSubsError((prev) => ({ ...prev, [item.id]: '' }));
+        try {
+            const res = await fetch('/api/substitutions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ingredient: item.name, recipeName, recipeIngredients }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            setSubs((prev) => ({ ...prev, [item.id]: data.substitutions ?? [] }));
+        } catch (err) {
+            setSubsError((prev) => ({ ...prev, [item.id]: err instanceof Error ? err.message : String(err) }));
+        } finally {
+            setSubsLoading(null);
+        }
+    };
 
     // Parse items from the ingredient list
     useEffect(() => {
@@ -174,37 +202,67 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                         ? formatQuantity(item.quantity * scale)
                         : null;
                     const isChecked = !!checked[checkedKey(item.name)];
+                    const itemSubs = subs[item.id];
+                    const itemSubError = subsError[item.id];
+                    const isLoadingSubs = subsLoading === item.id;
 
                     return (
-                        <div
-                            key={item.id}
-                            onClick={() => handleToggle(item)}
-                            className={`
-                                cursor-pointer group flex items-start gap-3 p-3 rounded-lg transition-colors select-none
-                                ${isChecked ? 'bg-emerald-50/50 border-emerald-100' : 'bg-white hover:bg-stone-50 border-transparent'}
-                                border
-                            `}
-                        >
-                            <div className={`
-                                flex-shrink-0 mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors
-                                ${isChecked
-                                    ? 'bg-emerald-500 border-emerald-500 text-white'
-                                    : 'bg-white border-stone-300 group-hover:border-emerald-400'}
-                            `}>
-                                {isChecked && <Check className="w-3.5 h-3.5" />}
+                        <div key={item.id}>
+                            <div
+                                onClick={() => handleToggle(item)}
+                                className={`
+                                    cursor-pointer group flex items-start gap-3 p-3 rounded-lg transition-colors select-none
+                                    ${isChecked ? 'bg-emerald-50/50 border-emerald-100' : 'bg-white hover:bg-stone-50 border-transparent'}
+                                    border
+                                `}
+                            >
+                                <div className={`
+                                    flex-shrink-0 mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors
+                                    ${isChecked
+                                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                                        : 'bg-white border-stone-300 group-hover:border-emerald-400'}
+                                `}>
+                                    {isChecked && <Check className="w-3.5 h-3.5" />}
+                                </div>
+
+                                <div className={`flex-1 text-sm leading-snug ${isChecked ? 'text-stone-900' : 'text-stone-500'}`}>
+                                    {displayQty && <span className="font-bold mr-1.5">{displayQty}</span>}
+                                    <span className={isChecked ? '' : 'line-through opacity-70'}>
+                                        {item.name}
+                                    </span>
+                                    {item.isStandard && (
+                                        <span className="ml-2 text-[10px] uppercase font-bold tracking-widest text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
+                                            Pantry
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* OM8 — "I don't have this" button */}
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); fetchSubstitutions(item); }}
+                                    disabled={isLoadingSubs}
+                                    title="I don't have this — suggest substitutes"
+                                    className="flex-shrink-0 p-1.5 text-stone-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors disabled:opacity-50"
+                                >
+                                    {isLoadingSubs ? <Loader2 className="w-4 h-4 animate-spin" /> : <HelpCircle className="w-4 h-4" />}
+                                </button>
                             </div>
 
-                            <div className={`flex-1 text-sm leading-snug ${isChecked ? 'text-stone-900' : 'text-stone-500'}`}>
-                                {displayQty && <span className="font-bold mr-1.5">{displayQty}</span>}
-                                <span className={isChecked ? '' : 'line-through opacity-70'}>
-                                    {item.name}
-                                </span>
-                                {item.isStandard && (
-                                    <span className="ml-2 text-[10px] uppercase font-bold tracking-widest text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
-                                        Pantry
-                                    </span>
-                                )}
-                            </div>
+                            {/* Substitutions panel */}
+                            {itemSubs && itemSubs.length > 0 && (
+                                <div className="ml-8 mt-1 mb-2 p-3 bg-indigo-50/60 border border-indigo-100 rounded-lg text-xs space-y-1.5">
+                                    <div className="font-bold text-indigo-900 text-[11px] uppercase tracking-wide">Try instead:</div>
+                                    {itemSubs.map((s, i) => (
+                                        <div key={i}>
+                                            <span className="font-semibold text-indigo-900">{s.name}</span>
+                                            <span className="text-indigo-700/80"> — {s.note}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {itemSubError && (
+                                <div className="ml-8 mt-1 mb-2 text-xs text-red-600">{itemSubError}</div>
+                            )}
                         </div>
                     );
                 })}

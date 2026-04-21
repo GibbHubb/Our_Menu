@@ -14,3 +14,6 @@ export interface Recipe {
     rating?: number;                                // OM5: 1-5 star rating
     shopping_list_checked?: Record<string, boolean>; // OM6: per-item checked state
 }
+
+// OM9 — Collection re-export for convenience
+export type { Collection } from './collections';

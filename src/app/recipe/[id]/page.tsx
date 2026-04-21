@@ -4,7 +4,8 @@ import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Recipe } from "@/lib/types";
 import { CATEGORIES } from "@/lib/constants";
-import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Edit2, Save, MoreHorizontal, Pencil, Copy, Check, Sparkles, Loader2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Edit2, Save, MoreHorizontal, Pencil, Copy, Check, Sparkles, Loader2, AlertTriangle, ChefHat } from "lucide-react";
+import { logCook, formatLastCooked } from "@/lib/cookLog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -36,6 +37,32 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
     const [showPasteFallback, setShowPasteFallback] = useState(false);
     const [pasteText, setPasteText] = useState("");
     const [savingPaste, setSavingPaste] = useState(false);
+
+    // OM7 — cook log state
+    const [lastCookedAt, setLastCookedAt] = useState<string | null>(null);
+    const [loggingCook, setLoggingCook] = useState(false);
+
+    useEffect(() => {
+        if (!id) return;
+        // Fetch the most recent cook date for this recipe
+        supabase
+            .from('cook_log')
+            .select('cooked_at')
+            .eq('recipe_id', id)
+            .order('cooked_at', { ascending: false })
+            .limit(1)
+            .then(({ data }) => {
+                if (data && data[0]) setLastCookedAt(data[0].cooked_at);
+            });
+    }, [id]);
+
+    const handleMadeIt = async () => {
+        if (!recipe || loggingCook) return;
+        setLoggingCook(true);
+        const entry = await logCook(recipe.id);
+        if (entry) setLastCookedAt(entry.cooked_at);
+        setLoggingCook(false);
+    };
 
     useEffect(() => {
         const fetchRecipe = async () => {
@@ -232,6 +259,22 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                 {/* Main Content */}
                 <div className="p-6 space-y-8">
 
+                    {/* OM7 — Made it today + last cooked badge */}
+                    <div className="flex items-center justify-between gap-3 bg-white rounded-xl border border-stone-200 px-4 py-3 shadow-sm">
+                        <div className="flex items-center gap-2 text-sm text-stone-600">
+                            <ChefHat className="w-4 h-4 text-stone-400" />
+                            <span>{formatLastCooked(lastCookedAt ?? undefined) ?? 'Never cooked'}</span>
+                        </div>
+                        <button
+                            onClick={handleMadeIt}
+                            disabled={loggingCook}
+                            className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700 disabled:opacity-60 active:scale-95 transition"
+                        >
+                            {loggingCook ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                            Made it today
+                        </button>
+                    </div>
+
                     {/* Extract Recipe — only when all three content fields are empty AND we have a link */}
                     {hasExternalLink &&
                      !recipe.ingredients?.trim() &&
@@ -374,7 +417,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                         ) : (
                             <div className="mt-2">
                                 {shoppingList ? (
-                                    <ShoppingListComp initialList={shoppingList} scale={scale} setScale={setScale} recipeId={recipe?.id} checkedMap={recipe?.shopping_list_checked} />
+                                    <ShoppingListComp initialList={shoppingList} scale={scale} setScale={setScale} recipeId={recipe?.id} checkedMap={recipe?.shopping_list_checked} recipeName={recipe?.title} recipeIngredients={recipe?.ingredients} />
                                 ) : (
                                     <p className="text-stone-400 italic">No items in shopping list.</p>
                                 )}
