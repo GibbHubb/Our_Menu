@@ -180,6 +180,31 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                         />
                     </div>
 
+                    {/* OM29 — Public share + reviews toggle */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-bold uppercase tracking-wider text-stone-500">
+                            Public share + reviews
+                        </label>
+                        <label className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={!!formData.is_public}
+                                onChange={(e) => setFormData({ ...formData, is_public: e.target.checked })}
+                                className="w-5 h-5 rounded accent-stone-900"
+                            />
+                            <div className="text-sm">
+                                <div className="text-stone-700 font-medium">
+                                    {formData.is_public ? "Public" : "Private"}
+                                </div>
+                                <div className="text-stone-500">
+                                    {formData.is_public
+                                        ? <>Shareable at <span className="font-mono">/r/{recipe?.id}</span> — anyone can leave a comment.</>
+                                        : "Only you can see this recipe. Enable to share via URL and accept reviews."}
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+
                     {/* Rating */}
                     <div className="space-y-2">
                         <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Rating</label>

@@ -22,6 +22,8 @@ export interface Recipe {
     nutrition_generated_at?: string;
     // OM13 — season tags ('spring' | 'summer' | 'autumn' | 'winter'); empty = year-round
     seasons?: string[];
+    // OM29 — owner has opted this recipe into the public /r/[id] share + reviews page.
+    is_public?: boolean;
 }
 
 // OM9 — Collection re-export for convenience
