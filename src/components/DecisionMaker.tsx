@@ -2,6 +2,10 @@ import { Recipe } from "@/lib/types";
 import { X, Sparkles, RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
 import RecipeCard from "./RecipeCard";
+// OM28 — pantry + season filters reuse the existing helpers; no new schema.
+import { isInSeason } from "@/lib/seasons";
+import { isCookableNow } from "@/lib/pantry";
+import { usePantry } from "@/lib/usePantry";
 
 interface DecisionMakerProps {
     isOpen: boolean;
@@ -14,12 +18,29 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
     const [isSpinning, setIsSpinning] = useState(false);
 
     const [selectedCategory, setSelectedCategory] = useState<string>("All");
+    // OM28 — three optional combinators on top of the existing category filter.
+    const [seasonOnly, setSeasonOnly] = useState(false);
+    const [pantryOnly, setPantryOnly] = useState(false);
+    const [topRatedOnly, setTopRatedOnly] = useState(false);
+
+    const { keys: pantryKeys } = usePantry();
 
     // Pick a random recipe
     const pickRandom = () => {
-        const candidates = selectedCategory === "All"
+        let candidates = selectedCategory === "All"
             ? recipes
             : recipes.filter(r => r.category && r.category.includes(selectedCategory as any));
+
+        // OM28 — apply the surprise-me filter stack.
+        if (seasonOnly) {
+            candidates = candidates.filter(r => isInSeason(r.seasons));
+        }
+        if (pantryOnly) {
+            candidates = candidates.filter(r => isCookableNow(r.ingredients, pantryKeys));
+        }
+        if (topRatedOnly) {
+            candidates = candidates.filter(r => (r.rating || 0) >= 4);
+        }
 
         if (candidates.length === 0) {
             setSelected(null);
@@ -56,7 +77,7 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
                     {isSpinning ? "Consulting the Food Gods..." : "Have you tried..."}
                 </h2>
 
-                <div className="flex flex-wrap justify-center gap-2 mb-6 max-w-xs">
+                <div className="flex flex-wrap justify-center gap-2 mb-3 max-w-xs">
                     {["All", "Mains", "Midweek", "Salad", "Pasta", "Soup", "Snacks"].map(cat => (
                         <button
                             key={cat}
@@ -70,6 +91,26 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
                                 }`}
                         >
                             {cat}
+                        </button>
+                    ))}
+                </div>
+
+                {/* OM28 — surprise-me filter combinators */}
+                <div className="flex flex-wrap justify-center gap-2 mb-6 max-w-xs">
+                    {([
+                        ["🌿 In season", seasonOnly, setSeasonOnly],
+                        ["🥕 Pantry-ready", pantryOnly, setPantryOnly],
+                        ["⭐ Top rated", topRatedOnly, setTopRatedOnly],
+                    ] as const).map(([label, val, set]) => (
+                        <button
+                            key={label}
+                            onClick={() => set(!val)}
+                            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${val
+                                    ? "bg-emerald-500 text-stone-900"
+                                    : "bg-white/10 text-white/80 hover:bg-white/20"
+                                }`}
+                        >
+                            {label}
                         </button>
                     ))}
                 </div>
