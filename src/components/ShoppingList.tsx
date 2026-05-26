@@ -5,6 +5,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Check, Copy, HelpCircle, Loader2 } from "lucide-react";
 import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
 import { supabase } from "@/lib/supabaseClient";
+import { canonicaliseIngredient } from "@/lib/ingredients";
+import { usePantry } from "@/lib/usePantry";
 
 interface Substitution { name: string; note: string; }
 
@@ -22,6 +24,9 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
     const [items, setItems] = useState<ParsedItem[]>([]);
     const [showCopied, setShowCopied] = useState(false);
     const [checked, setChecked] = useState<Record<string, boolean>>(checkedMap ?? {});
+    // OM12 — pantry-aware subtraction. Items whose canonical key is in the
+    // pantry are flagged "in-pantry" and hidden from the printable Copy List.
+    const { keys: pantryKeys, loaded: pantryLoaded } = usePantry();
     // OM8 — substitution state per item id
     const [subs, setSubs] = useState<Record<string, Substitution[]>>({});
     const [subsLoading, setSubsLoading] = useState<string | null>(null);
@@ -117,11 +122,19 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
         setScale(newScale);
     };
 
+    const isInPantry = useCallback((item: ParsedItem) => {
+        if (!pantryLoaded) return false;
+        return pantryKeys.has(canonicaliseIngredient(item.name));
+    }, [pantryKeys, pantryLoaded]);
+
     const handleCopy = () => {
         const textLines: string[] = [];
         const htmlLines: string[] = [];
 
-        items.filter(item => checked[checkedKey(item.name)]).forEach(item => {
+        items
+            .filter(item => checked[checkedKey(item.name)])
+            .filter(item => !isInPantry(item))
+            .forEach(item => {
             let text = item.name;
             if (item.quantity !== null) {
                 text = `${formatQuantity(item.quantity * scale)} ${item.name}`;
@@ -205,6 +218,7 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                     const itemSubs = subs[item.id];
                     const itemSubError = subsError[item.id];
                     const isLoadingSubs = subsLoading === item.id;
+                    const inPantry = isInPantry(item);
 
                     return (
                         <div key={item.id}>
@@ -212,25 +226,32 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                                 onClick={() => handleToggle(item)}
                                 className={`
                                     cursor-pointer group flex items-start gap-3 p-3 rounded-lg transition-colors select-none
-                                    ${isChecked ? 'bg-emerald-50/50 border-emerald-100' : 'bg-white hover:bg-stone-50 border-transparent'}
+                                    ${inPantry ? 'bg-amber-50/40 border-amber-100' : isChecked ? 'bg-emerald-50/50 border-emerald-100' : 'bg-white hover:bg-stone-50 border-transparent'}
                                     border
                                 `}
                             >
                                 <div className={`
                                     flex-shrink-0 mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors
-                                    ${isChecked
-                                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                                        : 'bg-white border-stone-300 group-hover:border-emerald-400'}
+                                    ${inPantry
+                                        ? 'bg-amber-400 border-amber-400 text-white'
+                                        : isChecked
+                                            ? 'bg-emerald-500 border-emerald-500 text-white'
+                                            : 'bg-white border-stone-300 group-hover:border-emerald-400'}
                                 `}>
-                                    {isChecked && <Check className="w-3.5 h-3.5" />}
+                                    {(inPantry || isChecked) && <Check className="w-3.5 h-3.5" />}
                                 </div>
 
-                                <div className={`flex-1 text-sm leading-snug ${isChecked ? 'text-stone-900' : 'text-stone-500'}`}>
+                                <div className={`flex-1 text-sm leading-snug ${isChecked || inPantry ? 'text-stone-900' : 'text-stone-500'}`}>
                                     {displayQty && <span className="font-bold mr-1.5">{displayQty}</span>}
-                                    <span className={isChecked ? '' : 'line-through opacity-70'}>
+                                    <span className={isChecked && !inPantry ? '' : (inPantry ? 'line-through decoration-amber-400/70' : 'line-through opacity-70')}>
                                         {item.name}
                                     </span>
-                                    {item.isStandard && (
+                                    {inPantry && (
+                                        <span className="ml-2 text-[10px] uppercase font-bold tracking-widest text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                                            In pantry
+                                        </span>
+                                    )}
+                                    {!inPantry && item.isStandard && (
                                         <span className="ml-2 text-[10px] uppercase font-bold tracking-widest text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
                                             Pantry
                                         </span>

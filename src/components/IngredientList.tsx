@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, CheckCircle2 } from "lucide-react";
 import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
+import { canonicaliseIngredient } from "@/lib/ingredients";
+import { usePantry } from "@/lib/usePantry";
 
 interface IngredientListProps {
     ingredients: string;
@@ -13,6 +15,8 @@ interface IngredientListProps {
 export default function IngredientList({ ingredients, scale, setScale }: IngredientListProps) {
     const [items, setItems] = useState<ParsedItem[]>([]);
     const [showCopied, setShowCopied] = useState(false);
+    // OM12 — green check next to pantry-matched ingredients.
+    const { keys: pantryKeys, loaded: pantryLoaded } = usePantry();
 
     useEffect(() => {
         if (!ingredients) {
@@ -104,10 +108,15 @@ export default function IngredientList({ ingredients, scale, setScale }: Ingredi
                     const displayQty = item.quantity !== null
                         ? formatQuantity(item.quantity * scale)
                         : null;
+                    const inPantry = pantryLoaded && pantryKeys.has(canonicaliseIngredient(item.name));
 
                     return (
                         <div key={item.id} className="text-stone-700 leading-relaxed flex items-start gap-2">
-                            <span className="mt-2 w-1.5 h-1.5 rounded-full bg-stone-300 flex-shrink-0" />
+                            {inPantry ? (
+                                <CheckCircle2 className="mt-1 w-4 h-4 text-emerald-500 flex-shrink-0" />
+                            ) : (
+                                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-stone-300 flex-shrink-0" />
+                            )}
                             <span>
                                 {displayQty && <span className="font-bold mr-1">{displayQty}</span>}
                                 {item.name}

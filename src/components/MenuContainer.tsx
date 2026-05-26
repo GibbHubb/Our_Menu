@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { Category, Recipe } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
 import Header from "./Header";
@@ -10,9 +10,14 @@ import EditRecipeModal from "./EditRecipeModal";
 import DecisionMaker from "./DecisionMaker";
 import ChatAgent from "./ChatAgent";
 import CollectionBar from "./CollectionBar";
-import { Plus, Wand2, Database, Sparkles, X } from "lucide-react";
+import { Plus, Wand2, Database, Sparkles, X, ChefHat } from "lucide-react";
 import { INITIAL_RECIPES } from "@/lib/initialData";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { usePantry } from "@/lib/usePantry";
+import { isCookableNow } from "@/lib/pantry";
+import { currentSeason, isInSeason, SEASON_LABEL, type Season } from "@/lib/seasons";
+import { useAuth } from "@/lib/AuthContext";
 
 import { CATEGORIES } from "@/lib/constants";
 import {
@@ -72,6 +77,15 @@ function MenuContent() {
 
     const [selectedCategory, setSelectedCategory] = useState<Category | "All">(initialCategory);
     const [searchTerm, setSearchTerm] = useState(initialSearch);
+    // OM14 Phase A — current user (used to stamp user_id on inserts)
+    const { user } = useAuth();
+
+    // OM12 — pantry-driven "Cookable now" filter.
+    const { keys: pantryKeys, loaded: pantryLoaded } = usePantry();
+    const [cookableOnly, setCookableOnly] = useState(false);
+    // OM13 — in-season filter
+    const [inSeasonOnly, setInSeasonOnly] = useState(false);
+    const activeSeason = currentSeason() as Season;
 
     // Sync state to URL
     useEffect(() => {
@@ -136,6 +150,16 @@ function MenuContent() {
         fetchRecipes();
     }, []);
 
+    // OM12 — cookable-now set, recomputed when pantry or recipes change.
+    const cookableSet = useMemo(() => {
+        if (!pantryLoaded) return new Set<string>();
+        const ids = new Set<string>();
+        for (const r of recipes) {
+            if (isCookableNow(r.ingredients, pantryKeys)) ids.add(r.id);
+        }
+        return ids;
+    }, [recipes, pantryKeys, pantryLoaded]);
+
     // Filter Logic
     const filteredRecipes = recipes.filter((recipe) => {
         const normalizedSearch = searchTerm.toLowerCase();
@@ -157,18 +181,51 @@ function MenuContent() {
             ? true
             : membershipMap[selectedCollectionId]?.has(recipe.id) ?? false;
 
-        return matchesCategory && matchesSearch && !hideBackBurner && matchesCollection;
+        // OM12 — cookable-now filter
+        const matchesCookable = !cookableOnly || cookableSet.has(recipe.id);
+
+        // OM13 — in-season filter (year-round recipes always pass)
+        const matchesSeason = !inSeasonOnly || isInSeason(recipe.seasons);
+
+        return matchesCategory && matchesSearch && !hideBackBurner && matchesCollection && matchesCookable && matchesSeason;
     });
+
+    // OM11 — fire-and-forget nutrition refresh after a recipe save. Runs only
+    // when ingredients are present, never blocks the UX, and patches the local
+    // row when Claude returns so the pill appears within a few seconds.
+    const refreshNutrition = (recipe: Recipe) => {
+        if (!recipe.ingredients || !recipe.ingredients.trim()) return;
+        fetch(`/api/nutrition/${recipe.id}`, { method: "POST" })
+            .then((r) => r.ok ? r.json() : null)
+            .then((body) => {
+                if (!body || body.cached) return;
+                setRecipes((prev) => prev.map((r) => r.id === recipe.id ? {
+                    ...r,
+                    kcal_per_serving: body.kcal_per_serving,
+                    protein_g: body.protein_g,
+                    carbs_g: body.carbs_g,
+                    fat_g: body.fat_g,
+                    ingredients_hash: body.ingredients_hash,
+                    nutrition_generated_at: new Date().toISOString(),
+                } : r));
+            })
+            .catch(() => { /* nutrition is best-effort — silent failure */ });
+    };
 
     // Add Recipe Handler
     const handleAddRecipe = async (newRecipe: any) => {
-        const { data, error } = await supabase.from("recipes").insert([newRecipe]).select();
+        // OM14 Phase A — stamp user_id when authenticated; RLS still allows
+        // NULL inserts for the legacy anonymous flow.
+        const payload = user ? { ...newRecipe, user_id: user.id } : newRecipe;
+        const { data, error } = await supabase.from("recipes").insert([payload]).select();
         if (error) {
             alert("Error adding recipe! " + error.message);
             throw error;
         }
         if (data) {
-            setRecipes((prev) => [data[0] as Recipe, ...prev]);
+            const created = data[0] as Recipe;
+            setRecipes((prev) => [created, ...prev]);
+            refreshNutrition(created);
         }
     };
 
@@ -181,6 +238,7 @@ function MenuContent() {
         }
 
         setRecipes((prev) => prev.map(r => r.id === updated.id ? updated : r));
+        refreshNutrition(updated);
     };
 
     const handleOpenEdit = (recipe: Recipe) => {
@@ -211,7 +269,9 @@ function MenuContent() {
                 continue;
             }
 
-            const { error } = await supabase.from("recipes").insert([r]);
+            // OM14 Phase A — stamp user_id on seed inserts when authenticated.
+            const payload = user ? { ...r, user_id: user.id } : r;
+            const { error } = await supabase.from("recipes").insert([payload]);
             if (!error) {
                 count++;
             } else {
@@ -307,6 +367,43 @@ function MenuContent() {
                 )}
             </div>
 
+            {/* OM12 — Cookable-now chip + Pantry nav (sits between semantic search and collections) */}
+            <div className="max-w-7xl mx-auto px-4 pt-3 flex items-center gap-2 flex-wrap">
+                <button
+                    onClick={() => setCookableOnly((v) => !v)}
+                    disabled={!pantryLoaded || cookableSet.size === 0}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                        cookableOnly
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    }`}
+                    title={cookableSet.size === 0 ? "Add ingredients to your pantry to enable" : "Show only recipes you can cook with what's in your pantry"}
+                >
+                    <ChefHat className="w-3.5 h-3.5" />
+                    Cookable now
+                    <span className="text-[10px] font-mono opacity-80">{cookableSet.size}</span>
+                </button>
+                <Link
+                    href="/pantry"
+                    className="text-xs text-stone-500 hover:text-stone-900 underline underline-offset-2"
+                >
+                    Manage pantry →
+                </Link>
+
+                {/* OM13 — In-season-now filter */}
+                <button
+                    onClick={() => setInSeasonOnly((v) => !v)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                        inSeasonOnly
+                            ? "bg-stone-900 text-white border-stone-900"
+                            : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+                    }`}
+                    title={`Show only recipes tagged for ${SEASON_LABEL[activeSeason]} (or year-round)`}
+                >
+                    In season: {SEASON_LABEL[activeSeason]}
+                </button>
+            </div>
+
             {/* OM9 — Collections filter bar */}
             <CollectionBar
                 collections={collections}
@@ -330,6 +427,7 @@ function MenuContent() {
                         onSeed={handleSeedData}
                         onEdit={handleOpenEdit}
                         error={error}
+                        cookableSet={cookableSet}
                     />
                 )}
             </main>

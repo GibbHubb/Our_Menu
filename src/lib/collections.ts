@@ -16,9 +16,13 @@ export async function getCollections(): Promise<Collection[]> {
 }
 
 export async function createCollection(name: string): Promise<Collection | null> {
+    // OM14 Phase A — stamp user_id when authenticated.
+    const { data: userData } = await supabase.auth.getUser();
+    const uid = userData.user?.id;
+    const row = uid ? { name, user_id: uid } : { name };
     const { data, error } = await supabase
         .from('recipe_collections')
-        .insert({ name })
+        .insert(row)
         .select()
         .single();
     if (error) { console.error('Error creating collection:', error); return null; }

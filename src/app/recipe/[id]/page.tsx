@@ -13,6 +13,7 @@ import EditRecipeModal from "@/components/EditRecipeModal";
 import ShoppingListComp from "@/components/ShoppingList";
 import IngredientList from "@/components/IngredientList";
 import { ReceiptScanner } from "@/components/ReceiptScanner";
+import { SEASON_COLOR, SEASON_LABEL, type Season } from "@/lib/seasons";
 
 export default function RecipePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -103,7 +104,8 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                 ingredients: updated.ingredients,
                 instructions: updated.instructions,
                 notes: updated.notes,
-                shopping_list: updated.shopping_list
+                shopping_list: updated.shopping_list,
+                seasons: updated.seasons ?? [],  // OM13
             })
             .eq("id", updated.id)
             .select('id');
@@ -253,6 +255,15 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                                 {recipe.category}
                             </span>
                         )}
+                        {/* OM13 — season chips */}
+                        {(recipe.seasons ?? []).map((s) => (
+                            <span
+                                key={s}
+                                className={`px-2 py-1 rounded-lg text-xs font-semibold border ${SEASON_COLOR[s as Season] ?? "bg-stone-100 text-stone-700 border-stone-200"}`}
+                            >
+                                {SEASON_LABEL[s as Season] ?? s}
+                            </span>
+                        ))}
                     </div>
                 </div>
 

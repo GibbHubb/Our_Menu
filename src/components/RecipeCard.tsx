@@ -1,16 +1,19 @@
 import React, { useState } from "react";
 import { Recipe } from "@/lib/types";
-import { Link2, Pencil } from "lucide-react";
+import { Link2, Pencil, ChefHat } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { isSeasonHighlight, currentSeason, SEASON_LABEL, type Season } from "@/lib/seasons";
 
 interface RecipeCardProps {
     recipe: Recipe;
     onEdit?: (recipe: Recipe) => void;
     onClick?: (recipe: Recipe) => void; // Kept for type compatibility but unused if we use Link
+    /** OM12 — true when every ingredient on this recipe is in the pantry. */
+    cookableNow?: boolean;
 }
 
-export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
+export default function RecipeCard({ recipe, onEdit, cookableNow }: RecipeCardProps) {
     // Simple deterministic color seed based on category for placeholder
     const getCategoryColor = (cat: string) => {
         switch (cat) {
@@ -29,6 +32,9 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
     };
 
     const [imgError, setImgError] = useState(false);
+    // OM13 — only render the pill when the recipe is season-tagged AND in-season now.
+    const seasonHighlight = isSeasonHighlight(recipe.seasons);
+    const seasonNow = currentSeason() as Season;
 
     // Using Link instead of onClick handler for better navigation/UX
     return (
@@ -78,6 +84,21 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                         )}
                     </div>
 
+                    {/* OM12 — cookable-now badge (top-right, distinct from edit/link affordances) */}
+                    {cookableNow && (
+                        <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-emerald-500/95 text-white text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full shadow-sm backdrop-blur-sm">
+                            <ChefHat className="w-3 h-3" />
+                            Cookable now
+                        </div>
+                    )}
+
+                    {/* OM13 — in-season pill (only when in-season AND not year-round) */}
+                    {seasonHighlight && (
+                        <div className="absolute bottom-3 left-3 text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full shadow-sm bg-white/90 backdrop-blur-sm text-stone-800 border border-stone-200">
+                            {SEASON_LABEL[seasonNow]}
+                        </div>
+                    )}
+
                     <div className="absolute top-3 right-3 flex gap-2">
                         {/* Edit Button - Needs preventDefault to not trigger header link */}
                         {onEdit && (
@@ -115,6 +136,20 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                                     {'\u2605'}
                                 </span>
                             ))}
+                        </div>
+                    )}
+                    {/* OM11 \u2014 nutrition pill (per serving) */}
+                    {recipe.kcal_per_serving != null && (
+                        <div
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-medium border border-emerald-100 self-start"
+                            title="AI estimate per serving"
+                        >
+                            <span>~{Math.round(recipe.kcal_per_serving)} kcal</span>
+                            {(recipe.protein_g != null || recipe.carbs_g != null || recipe.fat_g != null) && (
+                                <span className="text-emerald-600">
+                                    \u00b7 {Math.round(recipe.protein_g ?? 0)}P / {Math.round(recipe.carbs_g ?? 0)}C / {Math.round(recipe.fat_g ?? 0)}F
+                                </span>
+                            )}
                         </div>
                     )}
                 </div>

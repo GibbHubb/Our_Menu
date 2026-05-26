@@ -9,9 +9,11 @@ interface MasonryGridProps {
     onEdit?: (recipe: Recipe) => void;
     onClick?: (recipe: Recipe) => void;
     error?: string | null;
+    /** OM12 — set of recipe ids whose ingredients are fully in the pantry. */
+    cookableSet?: Set<string>;
 }
 
-export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error }: MasonryGridProps) {
+export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, cookableSet }: MasonryGridProps) {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
@@ -59,7 +61,13 @@ export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error }:
             <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4 px-4 pb-20">
                 <AnimatePresence>
                     {recipes.map((recipe) => (
-                        <RecipeCard key={recipe.id} recipe={recipe} onEdit={onEdit} onClick={onClick} />
+                        <RecipeCard
+                            key={recipe.id}
+                            recipe={recipe}
+                            onEdit={onEdit}
+                            onClick={onClick}
+                            cookableNow={cookableSet?.has(recipe.id) ?? false}
+                        />
                     ))}
                 </AnimatePresence>
             </div>

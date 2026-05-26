@@ -8,9 +8,13 @@ export interface CookLogEntry {
 
 /** Log a "made it" event for a recipe — inserts now() timestamp. */
 export async function logCook(recipeId: string): Promise<CookLogEntry | null> {
+    // OM14 Phase A — stamp user_id when authenticated.
+    const { data: userData } = await supabase.auth.getUser();
+    const uid = userData.user?.id;
+    const row = uid ? { recipe_id: recipeId, user_id: uid } : { recipe_id: recipeId };
     const { data, error } = await supabase
         .from('cook_log')
-        .insert({ recipe_id: recipeId })
+        .insert(row)
         .select()
         .single();
 

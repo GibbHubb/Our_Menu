@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Category, Recipe } from "@/lib/types";
 import { X, Loader2, Sparkles } from "lucide-react";
+import { SEASONS, SEASON_LABEL, type Season } from "@/lib/seasons";
 import {
     getCollections,
     getRecipeCollections,
@@ -206,6 +207,47 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                             className="w-full p-3 bg-stone-50 rounded-xl border-none focus:ring-2 focus:ring-amber-500 font-sans text-sm"
                         />
+                    </div>
+
+                    {/* OM13 — Seasons */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-bold uppercase tracking-wider text-stone-500">
+                            Seasons <span className="text-xs text-stone-400 normal-case font-normal">(leave empty for year-round)</span>
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, seasons: [] })}
+                                className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${
+                                    (formData.seasons ?? []).length === 0
+                                        ? "bg-stone-900 text-white shadow-md"
+                                        : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                                }`}
+                            >
+                                Year-round
+                            </button>
+                            {SEASONS.map((s) => {
+                                const current = (formData.seasons ?? []) as Season[];
+                                const isSelected = current.includes(s);
+                                return (
+                                    <button
+                                        key={s}
+                                        type="button"
+                                        onClick={() => {
+                                            const next = isSelected ? current.filter((x) => x !== s) : [...current, s];
+                                            setFormData({ ...formData, seasons: next });
+                                        }}
+                                        className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${
+                                            isSelected
+                                                ? "bg-stone-900 text-white shadow-md"
+                                                : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                                        }`}
+                                    >
+                                        {SEASON_LABEL[s]}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
 
                     {/* OM9 — Collections */}

@@ -4,14 +4,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseClient';
 import Anthropic from '@anthropic-ai/sdk';
+import { currentSeason } from '@/lib/seasons';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
     const { pantry, dietary, days } = await req.json();
 
-    // Get recipe titles + categories + ratings for context
-    const { data: recipes } = await supabase.from('recipes').select('id, title, category, rating');
+    // Get recipe titles + categories + ratings + seasons for context (OM13)
+    const { data: recipes } = await supabase.from('recipes').select('id, title, category, rating, seasons');
+    const season = currentSeason();
 
     // OM7 — exclude recipes cooked in the last 3 days
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
@@ -28,11 +30,19 @@ export async function POST(req: NextRequest) {
             let line = `- ${r.title}${cats ? ` (${cats})` : ''}`;
             if (r.rating && r.rating >= 4) line += ` [rated ${r.rating}/5 - preferred]`;
             else if (r.rating && r.rating <= 2) line += ` [rated ${r.rating}/5 - try to avoid]`;
+            // OM13 — surface season tags so the model can bias correctly
+            const seasonsArr = Array.isArray(r.seasons) ? r.seasons : [];
+            if (seasonsArr.length) {
+                const inSeason = seasonsArr.includes(season);
+                line += ` [seasons: ${seasonsArr.join('/')}${inSeason ? ' — IN SEASON' : ' — out of season'}]`;
+            }
             return line;
         })
         .join('\n');
 
     const prompt = `You are a meal planner. Given a recipe library and user preferences, create a ${days}-day meal plan.
+
+Current season: ${season}. Lean toward recipes tagged as IN SEASON (or year-round) when picking; penalise out-of-season picks unless the user specifically asks for one or the rest of the library has nothing better. Year-round recipes are always fair game.
 
 Recipe library:
 ${recipeContext}

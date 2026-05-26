@@ -3,6 +3,7 @@ import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import AIChat from "@/components/AIChat";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AuthProvider } from "@/lib/AuthContext";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -47,8 +48,10 @@ export default function RootLayout({
       <body
         className={`${playfair.variable} ${inter.variable} antialiased bg-stone-50 text-stone-900`}
       >
-        <ErrorBoundary>{children}</ErrorBoundary>
-        <AIChat />
+        <AuthProvider>
+          <ErrorBoundary>{children}</ErrorBoundary>
+          <AIChat />
+        </AuthProvider>
       </body>
     </html>
   );
