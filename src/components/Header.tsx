@@ -4,6 +4,7 @@ import { Search, ChefHat, LogIn, LogOut, User as UserIcon } from "lucide-react";
 import { Category } from "@/lib/types";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
+import { useUnitSystem } from "@/lib/useUnitSystem";  // OM27
 
 interface HeaderProps {
     categories: Category[];
@@ -21,6 +22,7 @@ export default function Header({
     onSearchChange,
 }: HeaderProps) {
     const { user, loading, signOut } = useAuth();
+    const [unitSystem, setUnitSystemPref] = useUnitSystem();  // OM27
     return (
         <header className="sticky top-0 z-50 bg-stone-50/95 backdrop-blur-md border-b border-stone-200 shadow-sm transition-all">
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-4">
@@ -46,6 +48,16 @@ export default function Header({
                                 className="w-full pl-10 pr-4 py-2 bg-white border border-stone-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-stone-400 transition-shadow shadow-sm"
                             />
                         </div>
+
+                        {/* OM27 — metric/US display toggle */}
+                        <button
+                            onClick={() => setUnitSystemPref(unitSystem === 'metric' ? 'us' : 'metric')}
+                            className="px-2.5 py-1.5 text-xs font-semibold rounded-full bg-stone-100 text-stone-700 hover:bg-stone-200 border border-stone-200"
+                            title="Toggle metric / US display units"
+                            aria-label="Toggle unit system"
+                        >
+                            {unitSystem === 'metric' ? 'g / ml' : 'oz / cup'}
+                        </button>
 
                         {/* OM14 Phase A — auth pill */}
                         {loading ? (

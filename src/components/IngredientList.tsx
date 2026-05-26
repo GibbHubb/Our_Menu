@@ -5,6 +5,8 @@ import { Copy, Check, CheckCircle2 } from "lucide-react";
 import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
 import { canonicaliseIngredient } from "@/lib/ingredients";
 import { usePantry } from "@/lib/usePantry";
+import { useUnitSystem } from "@/lib/useUnitSystem";  // OM27
+import { convertForDisplay } from "@/lib/unitConversion";  // OM27
 
 interface IngredientListProps {
     ingredients: string;
@@ -17,6 +19,9 @@ export default function IngredientList({ ingredients, scale, setScale }: Ingredi
     const [showCopied, setShowCopied] = useState(false);
     // OM12 — green check next to pantry-matched ingredients.
     const { keys: pantryKeys, loaded: pantryLoaded } = usePantry();
+    // OM27 — display unit system (metric/us); convert each line for display
+    // but keep the underlying ParsedItem for scaling/copy semantics.
+    const [unitSystem] = useUnitSystem();
 
     useEffect(() => {
         if (!ingredients) {
@@ -105,8 +110,14 @@ export default function IngredientList({ ingredients, scale, setScale }: Ingredi
             {/* List */}
             <div className="space-y-1">
                 {items.map((item) => {
-                    const displayQty = item.quantity !== null
-                        ? formatQuantity(item.quantity * scale)
+                    // OM27 — convert scaled quantity for display per the user's
+                    // pref. When the unit is unknown the converter is a no-op.
+                    const scaledQty = item.quantity !== null ? item.quantity * scale : null;
+                    const { quantity: convQty, unit: convUnit } = convertForDisplay(
+                        scaledQty, item.unit, unitSystem,
+                    );
+                    const displayQty = convQty !== null
+                        ? `${formatQuantity(convQty)}${convUnit ? ` ${convUnit}` : ''}`
                         : null;
                     const inPantry = pantryLoaded && pantryKeys.has(canonicaliseIngredient(item.name));
 
