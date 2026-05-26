@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { X, Loader2, Link2, Sparkles } from "lucide-react";
+import { useRef, useState } from "react";
+import { X, Loader2, Link2, Sparkles, Upload } from "lucide-react";
 import { Category } from "@/lib/types";
 import { SEASONS, SEASON_LABEL, type Season } from "@/lib/seasons";
+import { uploadRecipeImage } from "@/lib/recipeImages";  // OM25
 
 // OM10 — wider payload so URL-imported ingredients/instructions land in the same insert.
 // OM13 — seasons added to the same payload.
@@ -249,14 +250,26 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
 
                     <div>
                         <label className="block text-sm font-medium text-stone-700 mb-1">Image URL (Optional)</label>
-                        <input
-                            type="url"
-                            className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-stone-900 focus:outline-none"
-                            placeholder="https://image..."
-                            value={formData.image_url}
-                            onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                        />
-                        <p className="text-xs text-stone-400 mt-1">Paste an image address from Google Images.</p>
+                        <div className="flex gap-2">
+                            <input
+                                type="url"
+                                className="flex-1 px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-stone-900 focus:outline-none"
+                                placeholder="https://image..."
+                                value={formData.image_url}
+                                onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+                            />
+                            <ImageUploadButton
+                                onUploaded={(url) => setFormData((f) => ({ ...f, image_url: url }))}
+                            />
+                        </div>
+                        <p className="text-xs text-stone-400 mt-1">Paste an image address, or upload one (auto-resized, scoped to your account).</p>
+                        {formData.image_url && (
+                            <img
+                                src={formData.image_url}
+                                alt="Preview"
+                                className="mt-2 h-24 w-24 object-cover rounded border border-stone-200"
+                            />
+                        )}
                     </div>
 
                     {/* OM10 — extracted ingredients/instructions only show when we have them */}
@@ -308,5 +321,44 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                 </form>
             </div>
         </div>
+    );
+}
+
+
+// OM25 — Small upload button used by Add and Edit recipe modals.
+export function ImageUploadButton({ onUploaded }: { onUploaded: (url: string) => void }) {
+    const ref = useRef<HTMLInputElement>(null);
+    const [busy, setBusy] = useState(false);
+    return (
+        <>
+            <input
+                ref={ref}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setBusy(true);
+                    try {
+                        const res = await uploadRecipeImage(file);
+                        if (res) onUploaded(res.url);
+                    } finally {
+                        setBusy(false);
+                        if (ref.current) ref.current.value = "";
+                    }
+                }}
+            />
+            <button
+                type="button"
+                onClick={() => ref.current?.click()}
+                disabled={busy}
+                className="px-3 py-2 border border-stone-200 rounded-lg text-stone-700 hover:bg-stone-50 flex items-center gap-1.5 text-sm"
+                title="Upload a photo"
+            >
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {busy ? "" : "Upload"}
+            </button>
+        </>
     );
 }

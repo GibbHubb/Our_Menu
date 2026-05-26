@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Category, Recipe } from "@/lib/types";
 import { X, Loader2, Sparkles } from "lucide-react";
 import { SEASONS, SEASON_LABEL, type Season } from "@/lib/seasons";
+import { ImageUploadButton } from "./AddRecipeModal";  // OM25 — shared uploader
 import {
     getCollections,
     getRecipeCollections,
@@ -157,6 +158,8 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                                 <Sparkles className="w-4 h-4" />
                                 New AI Photo
                             </button>
+                            {/* OM25 — direct upload (per-user bucket; auto-resized via Supabase transform) */}
+                            <ImageUploadButton onUploaded={(url) => setFormData((f) => ({ ...f, image_url: url }))} />
                         </div>
                         {formData.image_url && (
                             <div className="h-40 w-full rounded-xl overflow-hidden bg-stone-100 mt-2 relative">
