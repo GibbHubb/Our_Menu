@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Folder, Plus, X, Pencil } from "lucide-react";
+import { Folder, Plus, X, Pencil, FileDown } from "lucide-react";
 import type { Collection } from "@/lib/collections";
 
 interface Props {
@@ -11,9 +11,10 @@ interface Props {
     onCreate: (name: string) => Promise<void>;
     onRename: (id: string, name: string) => Promise<void>;
     onDelete: (id: string) => Promise<void>;
+    onExportPdf?: (id: string) => void;  // OM26
 }
 
-export default function CollectionBar({ collections, selectedId, onSelect, onCreate, onRename, onDelete }: Props) {
+export default function CollectionBar({ collections, selectedId, onSelect, onCreate, onRename, onDelete, onExportPdf }: Props) {
     const [isCreating, setIsCreating] = useState(false);
     const [newName, setNewName] = useState("");
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -75,18 +76,36 @@ export default function CollectionBar({ collections, selectedId, onSelect, onCre
                             >
                                 {c.name}
                                 {selectedId === c.id && (
-                                    <span
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (confirm(`Delete collection "${c.name}"? Recipes will not be deleted.`)) onDelete(c.id);
-                                        }}
-                                        className="hover:text-red-200 ml-0.5 cursor-pointer"
-                                        aria-label="Delete collection"
-                                    >
-                                        <X className="w-3 h-3" />
-                                    </span>
+                                    <>
+                                        {/* OM26 — download collection as a PDF cookbook */}
+                                        {onExportPdf && (
+                                            <span
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onExportPdf(c.id);
+                                                }}
+                                                className="hover:text-amber-200 ml-0.5 cursor-pointer"
+                                                aria-label="Download as PDF cookbook"
+                                                title="Download as PDF cookbook"
+                                            >
+                                                <FileDown className="w-3 h-3" />
+                                            </span>
+                                        )}
+                                        <span
+                                            role="button"
+                                            tabIndex={0}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (confirm(`Delete collection "${c.name}"? Recipes will not be deleted.`)) onDelete(c.id);
+                                            }}
+                                            className="hover:text-red-200 ml-0.5 cursor-pointer"
+                                            aria-label="Delete collection"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </span>
+                                    </>
                                 )}
                             </button>
                         )}

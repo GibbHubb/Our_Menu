@@ -28,6 +28,7 @@ import {
     getCollectionMemberships,
     type Collection,
 } from "@/lib/collections";
+import { buildCookbookPDF } from "@/lib/exportPDF";  // OM26
 
 function MenuContent() {
     const router = useRouter();
@@ -412,6 +413,18 @@ function MenuContent() {
                 onCreate={handleCreateCollection}
                 onRename={handleRenameCollection}
                 onDelete={handleDeleteCollection}
+                /* OM26 — Download this collection as a PDF cookbook */
+                onExportPdf={async (collectionId) => {
+                    const memberships = await getCollectionMemberships();
+                    const ids = memberships[collectionId] || new Set<string>();
+                    const scoped = recipes.filter((r) => ids.has(r.id));
+                    const name = collections.find((c) => c.id === collectionId)?.name || "Cookbook";
+                    if (scoped.length === 0) {
+                        alert("This collection has no recipes yet.");
+                        return;
+                    }
+                    await buildCookbookPDF(name, scoped);
+                }}
             />
 
             <main className="max-w-7xl mx-auto pt-4">
