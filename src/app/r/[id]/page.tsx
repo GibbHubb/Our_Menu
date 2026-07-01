@@ -7,7 +7,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import type { Recipe } from "@/lib/types";
-import { fetchReviews, postReview, type Review } from "@/lib/reviews";
+import { fetchReviews, postReview, hideReview, replyToReview, type Review } from "@/lib/reviews";
+import { useAuth } from "@/lib/AuthContext";  // OM32
 
 export default function PublicRecipePage() {
     const { id } = useParams<{ id: string }>();
@@ -19,6 +20,11 @@ export default function PublicRecipePage() {
     const [rating, setRating] = useState<number | "">("");
     const [submitting, setSubmitting] = useState(false);
     const [submitMsg, setSubmitMsg] = useState<string | null>(null);
+    // OM32 — owner moderation. The owner is the signed-in user who owns the recipe.
+    const { user } = useAuth();
+    const isOwner = !!user && !!recipe && recipe.user_id === user.id;
+    const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({});
+    const [busyReviewId, setBusyReviewId] = useState<number | null>(null);
 
     useEffect(() => {
         if (!id) return;
@@ -65,6 +71,32 @@ export default function PublicRecipePage() {
         }
     };
 
+    // OM32 — owner: hide/unhide a review.
+    const toggleHide = async (r: Review) => {
+        setBusyReviewId(r.id);
+        try {
+            const updated = await hideReview(r.id, !r.is_hidden);
+            if (updated) setReviews((prev) => prev.map((x) => x.id === r.id ? updated : x));
+        } finally {
+            setBusyReviewId(null);
+        }
+    };
+
+    // OM32 — owner: post / replace the single reply on a review.
+    const submitReply = async (r: Review) => {
+        const draft = replyDrafts[r.id] ?? r.owner_reply ?? "";
+        setBusyReviewId(r.id);
+        try {
+            const updated = await replyToReview(r.id, draft);
+            if (updated) {
+                setReviews((prev) => prev.map((x) => x.id === r.id ? updated : x));
+                setReplyDrafts((prev) => { const n = { ...prev }; delete n[r.id]; return n; });
+            }
+        } finally {
+            setBusyReviewId(null);
+        }
+    };
+
     if (notFound) {
         return (
             <main className="max-w-2xl mx-auto p-8">
@@ -77,6 +109,10 @@ export default function PublicRecipePage() {
     if (!recipe) {
         return <main className="max-w-2xl mx-auto p-8 text-stone-400">Loading…</main>;
     }
+
+    // OM32 — guests never see hidden reviews; the owner sees them (marked) so
+    // they can unhide.
+    const visibleReviews = isOwner ? reviews : reviews.filter((r) => !r.is_hidden);
 
     return (
         <main className="max-w-2xl mx-auto p-4 sm:p-8">
@@ -149,15 +185,25 @@ export default function PublicRecipePage() {
                     {submitMsg && <p className="text-xs text-stone-500">{submitMsg}</p>}
                 </form>
 
-                {reviews.length === 0 ? (
+                {visibleReviews.length === 0 ? (
                     <p className="text-stone-500 italic">No reviews yet — be the first.</p>
                 ) : (
                     <ul className="space-y-3">
-                        {reviews.map((r) => (
-                            <li key={r.id} className="p-3 bg-white rounded-xl border border-stone-100">
+                        {visibleReviews.map((r) => (
+                            <li
+                                key={r.id}
+                                className={`p-3 rounded-xl border ${
+                                    r.is_hidden
+                                        ? "bg-stone-50 border-dashed border-stone-300 opacity-70"
+                                        : "bg-white border-stone-100"
+                                }`}
+                            >
                                 <div className="flex items-center justify-between text-sm text-stone-500 mb-1">
                                     <span className="font-semibold text-stone-700">
                                         {r.guest_name || "Anonymous"}
+                                        {isOwner && r.is_hidden && (
+                                            <span className="ml-2 text-xs font-normal text-stone-400 uppercase tracking-wide">Hidden</span>
+                                        )}
                                     </span>
                                     <span>
                                         {r.rating ? "★".repeat(r.rating) + "☆".repeat(5 - r.rating) : ""}
@@ -166,6 +212,55 @@ export default function PublicRecipePage() {
                                     </span>
                                 </div>
                                 <p className="text-stone-700 whitespace-pre-wrap">{r.comment}</p>
+
+                                {/* OM32 — owner reply (shown to everyone) */}
+                                {r.owner_reply && (
+                                    <div className="mt-2 ml-3 pl-3 border-l-2 border-stone-300 bg-stone-50 rounded-r-lg py-2 pr-2">
+                                        <div className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-0.5">
+                                            Owner reply
+                                            {r.owner_replied_at && (
+                                                <span className="ml-1 font-normal normal-case text-stone-400">
+                                                    · {new Date(r.owner_replied_at).toLocaleDateString()}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-stone-700 whitespace-pre-wrap text-sm">{r.owner_reply}</p>
+                                    </div>
+                                )}
+
+                                {/* OM32 — owner moderation controls */}
+                                {isOwner && (
+                                    <div className="mt-3 space-y-2 border-t border-stone-100 pt-2">
+                                        <div className="flex gap-2">
+                                            <textarea
+                                                rows={2}
+                                                placeholder={r.owner_reply ? "Edit your reply…" : "Reply to this review…"}
+                                                value={replyDrafts[r.id] ?? r.owner_reply ?? ""}
+                                                onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                                                className="flex-1 px-2 py-1.5 border border-stone-200 rounded text-sm bg-white"
+                                                maxLength={2000}
+                                            />
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => submitReply(r)}
+                                                disabled={busyReviewId === r.id}
+                                                className="px-3 py-1 rounded-full bg-stone-900 text-white text-xs font-semibold disabled:opacity-50"
+                                            >
+                                                {r.owner_reply ? "Update reply" : "Post reply"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleHide(r)}
+                                                disabled={busyReviewId === r.id}
+                                                className="px-3 py-1 rounded-full border border-stone-300 text-stone-700 text-xs font-semibold hover:bg-stone-100 disabled:opacity-50"
+                                            >
+                                                {r.is_hidden ? "Unhide" : "Hide"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </li>
                         ))}
                     </ul>

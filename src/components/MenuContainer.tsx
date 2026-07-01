@@ -17,6 +17,7 @@ import Link from "next/link";
 import { usePantry } from "@/lib/usePantry";
 import { isCookableNow } from "@/lib/pantry";
 import { currentSeason, isInSeason, SEASON_LABEL, type Season } from "@/lib/seasons";
+import { DIETS, DIET_LABEL, dietMatches, type Diet } from "@/lib/diet";  // OM30
 import { useAuth } from "@/lib/AuthContext";
 
 import { CATEGORIES } from "@/lib/constants";
@@ -87,6 +88,8 @@ function MenuContent() {
     // OM13 — in-season filter
     const [inSeasonOnly, setInSeasonOnly] = useState(false);
     const activeSeason = currentSeason() as Season;
+    // OM30 — diet filter (single-select; null = no diet constraint)
+    const [dietFilter, setDietFilter] = useState<Diet | null>(null);
 
     // Sync state to URL
     useEffect(() => {
@@ -188,7 +191,10 @@ function MenuContent() {
         // OM13 — in-season filter (year-round recipes always pass)
         const matchesSeason = !inSeasonOnly || isInSeason(recipe.seasons);
 
-        return matchesCategory && matchesSearch && !hideBackBurner && matchesCollection && matchesCookable && matchesSeason;
+        // OM30 — diet filter (untagged recipes excluded when a diet is active)
+        const matchesDiet = !dietFilter || dietMatches(recipe.diet, [dietFilter]);
+
+        return matchesCategory && matchesSearch && !hideBackBurner && matchesCollection && matchesCookable && matchesSeason && matchesDiet;
     });
 
     // OM11 — fire-and-forget nutrition refresh after a recipe save. Runs only
@@ -403,6 +409,25 @@ function MenuContent() {
                 >
                     In season: {SEASON_LABEL[activeSeason]}
                 </button>
+
+                {/* OM30 — diet filter chips (single-select; click active to clear) */}
+                {DIETS.map((d) => {
+                    const on = dietFilter === d;
+                    return (
+                        <button
+                            key={d}
+                            onClick={() => setDietFilter((prev) => prev === d ? null : d)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                on
+                                    ? "bg-emerald-600 text-white border-emerald-600"
+                                    : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+                            }`}
+                            title={`Show only recipes tagged ${DIET_LABEL[d]} (untagged recipes are hidden)`}
+                        >
+                            {DIET_LABEL[d]}
+                        </button>
+                    );
+                })}
             </div>
 
             {/* OM9 — Collections filter bar */}

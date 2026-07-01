@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Category, Recipe } from "@/lib/types";
 import { X, Loader2, Sparkles } from "lucide-react";
 import { SEASONS, SEASON_LABEL, type Season } from "@/lib/seasons";
+import { DIETS, DIET_LABEL, type Diet } from "@/lib/diet";  // OM30
 import { ImageUploadButton } from "./AddRecipeModal";  // OM25 — shared uploader
 import {
     getCollections,
@@ -272,6 +273,36 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                                         }`}
                                     >
                                         {SEASON_LABEL[s]}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* OM30 — Diet tags */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-bold uppercase tracking-wider text-stone-500">
+                            Diet <span className="text-xs text-stone-400 normal-case font-normal">(only tag what the recipe genuinely satisfies)</span>
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                            {DIETS.map((d) => {
+                                const current = (formData.diet ?? []) as Diet[];
+                                const isSelected = current.includes(d);
+                                return (
+                                    <button
+                                        key={d}
+                                        type="button"
+                                        onClick={() => {
+                                            const next = isSelected ? current.filter((x) => x !== d) : [...current, d];
+                                            setFormData({ ...formData, diet: next });
+                                        }}
+                                        className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${
+                                            isSelected
+                                                ? "bg-stone-900 text-white shadow-md"
+                                                : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                                        }`}
+                                    >
+                                        {DIET_LABEL[d]}
                                     </button>
                                 );
                             })}

@@ -15,6 +15,11 @@ export interface Review {
     comment: string;
     rating: number | null;
     created_at: string;
+    // OM32 — owner moderation. Hidden reviews are filtered out of the public
+    // page; owner_reply holds the single owner response.
+    is_hidden?: boolean;
+    owner_reply?: string | null;
+    owner_replied_at?: string | null;
 }
 
 
@@ -66,4 +71,51 @@ export async function postReview(
         return null;
     }
     return data as Review;
+}
+
+
+// ── OM32 — owner moderation ────────────────────────────────────────────────
+// Both go through the same (auth-carrying) Supabase client. RLS policy
+// "reviews owner update" (014_review_moderation.sql) lets ONLY the recipe
+// owner update these rows, so a wrong caller gets 0 rows back, not an error.
+
+/** Hide or unhide a review. Returns the updated row, or null on failure. */
+export async function hideReview(
+    reviewId: number,
+    hidden: boolean,
+): Promise<Review | null> {
+    const { data, error } = await supabase
+        .from("recipe_reviews")
+        .update({ is_hidden: hidden })
+        .eq("id", reviewId)
+        .select()
+        .maybeSingle();
+    if (error) {
+        console.warn("[OM32] hideReview:", error.message);
+        return null;
+    }
+    return (data as Review) ?? null;
+}
+
+/** Set (or replace) the single owner reply on a review. Pass "" to clear it.
+ *  Returns the updated row, or null on failure. */
+export async function replyToReview(
+    reviewId: number,
+    reply: string,
+): Promise<Review | null> {
+    const trimmed = (reply || "").trim();
+    const { data, error } = await supabase
+        .from("recipe_reviews")
+        .update({
+            owner_reply: trimmed || null,
+            owner_replied_at: trimmed ? new Date().toISOString() : null,
+        })
+        .eq("id", reviewId)
+        .select()
+        .maybeSingle();
+    if (error) {
+        console.warn("[OM32] replyToReview:", error.message);
+        return null;
+    }
+    return (data as Review) ?? null;
 }

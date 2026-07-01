@@ -1,10 +1,14 @@
 // OM27 — Display-time unit conversion (metric ⇄ US).
 //
-// Scope per plan §4: same-dimension only — mass ↔ mass, volume ↔ volume.
-// No cup-flour-→-g cross-dimension guessing (that needs an ingredient
-// density table; tracked as a possible followup).
+// Same-dimension conversion (mass ↔ mass, volume ↔ volume) is OM27.
+// OM31 adds OPTIONAL cross-dimension (volume ↔ mass) conversion for known
+// ingredients via a density lookup: a US recipe's "1 cup flour" shows grams
+// to a metric cook, and "200 g flour" shows cups to a US cook. When no
+// density is known the value passes through unchanged (never a wrong number).
 //
 // User pref lives in localStorage (no DB column, no schema change).
+
+import { lookupDensity } from './ingredientDensity';  // OM31
 
 export type UnitSystem = 'metric' | 'us';
 
@@ -55,6 +59,14 @@ function unitKey(raw: string | null | undefined): string | null {
 const MASS = new Set(['g', 'kg', 'oz', 'lb']);
 const VOLUME = new Set(['ml', 'l', 'tsp', 'tbsp', 'floz', 'cup', 'pt', 'qt', 'gal']);
 
+// OM31 — cross-dimension triggers. We only bridge volume↔mass when the source
+// uses the OTHER system's customary dimension: US recipes write dry goods in
+// volume (cup/tbsp/…), metric in mass (g/kg). So "cup flour → g" fires only for
+// a metric reader, and "g flour → cup" only for a US reader. Metric volumes
+// (ml/l) are left alone — a metric cook reading "250 ml milk" wants ml, not g.
+const US_VOLUME = new Set(['cup', 'tbsp', 'tsp', 'floz', 'pt', 'qt', 'gal']);
+const METRIC_MASS = new Set(['g', 'kg']);
+
 // To base (mass → grams, volume → millilitres).
 const TO_BASE: Record<string, number> = {
     g: 1, kg: 1000,
@@ -93,12 +105,44 @@ export function convertForDisplay(
     quantity: number | null,
     unit: string | null,
     system: UnitSystem,
+    ingredientName?: string,
 ): { quantity: number | null; unit: string | null } {
     if (quantity === null || unit == null) return { quantity, unit };
     const key = unitKey(unit);
     if (!key) return { quantity, unit };
     const sourceIsMetric = isMetric(key);
     const wantMetric = system === 'metric';
+
+    // OM31 — cross-dimension (volume↔mass) via ingredient density. Takes
+    // precedence over the same-dimension path below for the two customary
+    // cases; falls through to OM27 behaviour when no density is known.
+    if (ingredientName) {
+        const density = lookupDensity(ingredientName);  // g per ml
+        if (density && density > 0) {
+            // US-style volume → metric reader wants grams.
+            if (wantMetric && US_VOLUME.has(key)) {
+                const ml = quantity * (TO_BASE[key] || 1);
+                const grams = ml * density;
+                const target = grams >= 1000 ? 'kg' : 'g';
+                const converted = grams / (TO_BASE[target] || 1);
+                return { quantity: round(converted, target), unit: target };
+            }
+            // Metric mass → US reader wants cups/tbsp/tsp.
+            if (!wantMetric && METRIC_MASS.has(key)) {
+                const grams = quantity * (TO_BASE[key] || 1);
+                const ml = grams / density;
+                let target: string;
+                if (ml < 7.5) target = 'tsp';
+                else if (ml < 30) target = 'tbsp';
+                else if (ml < 473.176) target = 'cup';
+                else if (ml < 946.353) target = 'pt';
+                else target = 'qt';
+                const converted = ml / (TO_BASE[target] || 1);
+                return { quantity: round(converted, target), unit: target };
+            }
+        }
+    }
+
     if (sourceIsMetric === wantMetric) return { quantity, unit };
 
     // Convert to base, then pick a target unit of the same dimension.

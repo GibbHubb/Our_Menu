@@ -21,6 +21,39 @@ export const STANDARD_ITEMS = [
 // Regex to find quantity at start: "1.5 cups...", "1/2 tsp...", "2 onions"
 const QUANTITY_REGEX = /^(\d+(?:\.\d+)?|\d+\/\d+)\s*(.*)$/;
 
+// OM31 — mass/volume units we recognise immediately after a quantity, so we
+// can split "1 cup flour" → { quantity: 1, unit: "cup", name: "flour" }. Only
+// convertible units are listed (countable units like "clove"/"slice" stay in
+// the name so no conversion is attempted). Unknown leading words are left in
+// the name and unit stays null.
+const CONVERTIBLE_UNITS = new Set([
+    'g', 'gram', 'grams', 'gr', 'kg', 'kilo', 'kilos', 'kilogram', 'kilograms',
+    'oz', 'ounce', 'ounces', 'lb', 'lbs', 'pound', 'pounds',
+    'ml', 'milliliter', 'milliliters', 'millilitre', 'millilitres',
+    'l', 'liter', 'liters', 'litre', 'litres',
+    'tsp', 'teaspoon', 'teaspoons', 'tbsp', 'tbs', 'tablespoon', 'tablespoons',
+    'cup', 'cups', 'c',
+    'pt', 'pint', 'pints', 'qt', 'quart', 'quarts', 'gal', 'gallon', 'gallons',
+    'floz',
+]);
+
+// Split a leading convertible unit off the remainder. Returns the canonical-ish
+// unit token (kept as-typed; unitConversion normalises it) + the name without
+// the unit, or { unit: null, name: rest } when no unit is recognised.
+const extractUnit = (rest: string): { unit: string | null; name: string } => {
+    const tokens = rest.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return { unit: null, name: rest };
+    const first = tokens[0].toLowerCase().replace(/\.$/, '');
+    // "fl oz" arrives as two tokens.
+    if (first === 'fl' && tokens[1] && tokens[1].toLowerCase().replace(/\.$/, '') === 'oz') {
+        return { unit: 'fl oz', name: tokens.slice(2).join(' ') };
+    }
+    if (CONVERTIBLE_UNITS.has(first)) {
+        return { unit: tokens[0], name: tokens.slice(1).join(' ') };
+    }
+    return { unit: null, name: rest };
+};
+
 export const parseQuantity = (str: string): number => {
     if (str.includes('/')) {
         const [num, den] = str.split('/').map(Number);
@@ -71,19 +104,23 @@ export const parseIngredientLine = (line: string, idx: number): ParsedItem => {
         rest = match[2];
     }
 
-    const lowerRest = rest.toLowerCase();
+    // OM31 — only split a unit when there is a leading quantity ("2 cups flour");
+    // a bare "cup" with no number is ambiguous and stays part of the name.
+    const { unit, name } = match ? extractUnit(rest) : { unit: null, name: rest };
+
+    const lowerName = name.toLowerCase();
     const isStandard = STANDARD_ITEMS.some(si =>
-        lowerRest === si ||
-        lowerRest.startsWith(si + ' ') ||
-        lowerRest.endsWith(' ' + si) ||
-        lowerRest.includes(' ' + si + ' ')
+        lowerName === si ||
+        lowerName.startsWith(si + ' ') ||
+        lowerName.endsWith(' ' + si) ||
+        lowerName.includes(' ' + si + ' ')
     );
 
     return {
         original: line, // Keep full original for safety? Or clean? Let's keep original for ref, but use clean for display
-        name: rest,
+        name,
         quantity,
-        unit: null,
+        unit,
         isStandard,
         isChecked: !isStandard,
         id: `item-${idx}-${Date.now()}` // fallback unique id

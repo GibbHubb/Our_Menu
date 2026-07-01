@@ -6,6 +6,7 @@ import RecipeCard from "./RecipeCard";
 import { isInSeason } from "@/lib/seasons";
 import { isCookableNow } from "@/lib/pantry";
 import { usePantry } from "@/lib/usePantry";
+import { DIETS, DIET_LABEL, dietMatches, type Diet } from "@/lib/diet";  // OM30
 
 interface DecisionMakerProps {
     isOpen: boolean;
@@ -22,6 +23,8 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
     const [seasonOnly, setSeasonOnly] = useState(false);
     const [pantryOnly, setPantryOnly] = useState(false);
     const [topRatedOnly, setTopRatedOnly] = useState(false);
+    // OM30 — 🥗 diet filter; empty = no diet constraint.
+    const [diets, setDiets] = useState<Diet[]>([]);
 
     const { keys: pantryKeys } = usePantry();
 
@@ -40,6 +43,11 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
         }
         if (topRatedOnly) {
             candidates = candidates.filter(r => (r.rating || 0) >= 4);
+        }
+        // OM30 — when ≥1 diet is chosen, keep only recipes whose diet tags
+        // intersect; empty-diet recipes are excluded (not asserted safe).
+        if (diets.length) {
+            candidates = candidates.filter(r => dietMatches(r.diet, diets));
         }
 
         if (candidates.length === 0) {
@@ -113,6 +121,25 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
                             {label}
                         </button>
                     ))}
+                </div>
+
+                {/* OM30 — 🥗 diet filter (multi-select; empty = no constraint) */}
+                <div className="flex flex-wrap justify-center gap-2 mb-6 max-w-xs">
+                    {DIETS.map((d) => {
+                        const on = diets.includes(d);
+                        return (
+                            <button
+                                key={d}
+                                onClick={() => setDiets((prev) => on ? prev.filter((x) => x !== d) : [...prev, d])}
+                                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${on
+                                        ? "bg-emerald-500 text-stone-900"
+                                        : "bg-white/10 text-white/80 hover:bg-white/20"
+                                    }`}
+                            >
+                                🥗 {DIET_LABEL[d]}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {isSpinning ? (

@@ -42,9 +42,13 @@ export default function IngredientList({ ingredients, scale, setScale }: Ingredi
         const htmlLines: string[] = [];
 
         items.forEach(item => {
+            // OM31 — the unit now lives on item.unit (split out of the name by
+            // the parser), so rebuild "<qty> <unit> <name>". Copy stays in the
+            // recipe's original units (conversion is display-only).
             let itemText = item.name;
             if (item.quantity !== null) {
-                itemText = `${formatQuantity(item.quantity * scale)} ${item.name}`;
+                const qtyPart = formatQuantity(item.quantity * scale);
+                itemText = [qtyPart, item.unit, item.name].filter(Boolean).join(' ');
             }
             textLines.push(`- [ ] ${itemText}`);
             htmlLines.push(`<li><input type="checkbox" /> ${itemText}</li>`);
@@ -113,8 +117,10 @@ export default function IngredientList({ ingredients, scale, setScale }: Ingredi
                     // OM27 — convert scaled quantity for display per the user's
                     // pref. When the unit is unknown the converter is a no-op.
                     const scaledQty = item.quantity !== null ? item.quantity * scale : null;
+                    // OM31 — pass the ingredient name so volume↔mass cross-conversion
+                    // can fire for known ingredients (flour, sugar, …).
                     const { quantity: convQty, unit: convUnit } = convertForDisplay(
-                        scaledQty, item.unit, unitSystem,
+                        scaledQty, item.unit, unitSystem, item.name,
                     );
                     const displayQty = convQty !== null
                         ? `${formatQuantity(convQty)}${convUnit ? ` ${convUnit}` : ''}`

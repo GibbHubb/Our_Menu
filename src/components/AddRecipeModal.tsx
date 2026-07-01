@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { X, Loader2, Link2, Sparkles, Upload } from "lucide-react";
 import { Category } from "@/lib/types";
 import { SEASONS, SEASON_LABEL, type Season } from "@/lib/seasons";
+import { DIETS, DIET_LABEL, type Diet } from "@/lib/diet";  // OM30
 import { uploadRecipeImage } from "@/lib/recipeImages";  // OM25
 
 // OM10 — wider payload so URL-imported ingredients/instructions land in the same insert.
@@ -14,6 +15,7 @@ export interface AddRecipePayload {
     ingredients?: string;
     instructions?: string;
     seasons?: Season[];
+    diet?: Diet[];
 }
 
 interface AddRecipeModalProps {
@@ -31,6 +33,7 @@ const EMPTY_FORM = {
     ingredients: "",
     instructions: "",
     seasons: [] as Season[],
+    diet: [] as Diet[],
 };
 
 export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: AddRecipeModalProps) {
@@ -65,6 +68,7 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
             if (formData.ingredients.trim()) payload.ingredients = formData.ingredients;
             if (formData.instructions.trim()) payload.instructions = formData.instructions;
             if (formData.seasons.length) payload.seasons = formData.seasons;
+            if (formData.diet.length) payload.diet = formData.diet;
             await onAdd(payload);
             onClose();
             reset();
@@ -231,6 +235,37 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                                         }`}
                                     >
                                         {SEASON_LABEL[s]}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* OM30 — Diet tags */}
+                    <div>
+                        <label className="block text-sm font-medium text-stone-700 mb-2">
+                            Diet <span className="text-xs text-stone-400">(only tag what the recipe satisfies)</span>
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                            {DIETS.map((d) => {
+                                const isSelected = formData.diet.includes(d);
+                                return (
+                                    <button
+                                        key={d}
+                                        type="button"
+                                        onClick={() => {
+                                            const next = isSelected
+                                                ? formData.diet.filter((x) => x !== d)
+                                                : [...formData.diet, d];
+                                            setFormData({ ...formData, diet: next });
+                                        }}
+                                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                                            isSelected
+                                                ? "bg-stone-900 text-white shadow-md"
+                                                : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                                        }`}
+                                    >
+                                        {DIET_LABEL[d]}
                                     </button>
                                 );
                             })}
