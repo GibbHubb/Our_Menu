@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { apiFetch } from '@/lib/apiFetch';
 import type { Recipe } from '@/lib/types';
 
 interface PlanDay {
@@ -41,7 +42,7 @@ export default function MealPlanPage() {
         setSaved(false);
         setError('');
         try {
-            const res = await fetch('/api/meal-plan/generate', {
+            const res = await apiFetch('/api/meal-plan/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pantry, dietary, days }),
@@ -58,12 +59,24 @@ export default function MealPlanPage() {
 
     async function savePlan() {
         if (!plan) return;
-        await fetch('/api/meal-plan/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ plan, preferences: { pantry, dietary, days } }),
-        });
-        setSaved(true);
+        setError('');
+        // OM14c — the save route now requires a signed-in caller (the plan is
+        // stored against user_id). The response was previously ignored, so a
+        // failure still flipped the UI to "saved"; surface it instead.
+        try {
+            const res = await apiFetch('/api/meal-plan/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan, preferences: { pantry, dietary, days } }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || `HTTP ${res.status}`);
+            }
+            setSaved(true);
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : String(e));
+        }
     }
 
     async function handleDownloadPDF() {

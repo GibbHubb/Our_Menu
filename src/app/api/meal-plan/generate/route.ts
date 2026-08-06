@@ -2,7 +2,7 @@
 // Requires: 002_meal_plans.sql applied in Supabase
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
+import { createRequestClient } from '@/lib/supabaseServer';
 import Anthropic from '@anthropic-ai/sdk';
 import { currentSeason } from '@/lib/seasons';
 
@@ -10,6 +10,10 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
     const { pantry, dietary, days } = await req.json();
+
+    // OM14c — read as the caller so recipes and cook_log are their own rows
+    // once those tables are user-scoped, not the anonymous view of them.
+    const supabase = createRequestClient(req);
 
     // Get recipe titles + categories + ratings + seasons for context (OM13)
     const { data: recipes } = await supabase.from('recipes').select('id, title, category, rating, seasons');

@@ -3,11 +3,17 @@
 // Also ensure OPENAI_API_KEY is set in .env.local.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
+import { createAdminClient } from '@/lib/supabaseServer';
 import OpenAI from 'openai';
 
 export async function POST(_req: NextRequest) {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    // OM14c — this is a batch job over EVERY recipe, so it is deliberately the
+    // admin client rather than a caller-scoped one: it must see all rows. It
+    // previously used the shared browser singleton, which happened to work
+    // only because nothing was RLS-scoped yet.
+    const supabase = createAdminClient();
     // Fetch all recipes
     const { data: recipes, error } = await supabase
         .from('recipes')

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { Category, Recipe } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
+import { apiFetch } from "@/lib/apiFetch";
 import Header from "./Header";
 import MasonryGrid from "./MasonryGrid";
 import AddRecipeModal from "./AddRecipeModal";
@@ -116,7 +117,7 @@ function MenuContent() {
         setSemanticLoading(true);
         setSemanticError('');
         try {
-            const res = await fetch('/api/recipes/search', {
+            const res = await apiFetch('/api/recipes/search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: semanticQuery }),

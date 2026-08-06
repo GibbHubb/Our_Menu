@@ -2,12 +2,15 @@
 // Requires: 001_recipe_embeddings.sql applied in Supabase (match_recipes RPC)
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
+import { createRequestClient } from '@/lib/supabaseServer';
 import OpenAI from 'openai';
 
 export async function POST(req: NextRequest) {
     const { query } = await req.json();
     if (!query) return NextResponse.json({ error: 'query required' }, { status: 400 });
+
+    // OM14c — search the caller's own recipes, not the anonymous view.
+    const supabase = createRequestClient(req);
 
     if (!process.env.OPENAI_API_KEY) {
         return NextResponse.json({ error: 'Semantic search is not configured (OPENAI_API_KEY missing)' }, { status: 503 });
