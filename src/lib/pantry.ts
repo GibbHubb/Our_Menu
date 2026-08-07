@@ -66,10 +66,13 @@ export async function bulkAddPantryItems(text: string): Promise<number> {
 
   if (!rows.length) return 0;
 
-  // OM14 — conflict target depends on auth: signed-in users have a unique
-  // (user_id, canonical_key); anonymous flow keeps using canonical_key alone
-  // until the user signs in (legacy single-tenant behaviour).
-  const onConflict = uid ? 'user_id,canonical_key' : 'canonical_key';
+  // OM14 Phase B — the pantry is shared, so the dedupe key is the household,
+  // not the user: otherwise Max and Bron each end up with their own "onion".
+  // One target for both cases — an anonymous row has household_id NULL, and
+  // NULLs never collide in a unique index, so the upsert simply inserts. (The
+  // old anonymous target 'canonical_key' had been dangling since 010 dropped
+  // that constraint, which made anonymous bulk-add fail with a 42P10.)
+  const onConflict = 'household_id,canonical_key';
   const { error, count } = await supabase
     .from('pantry_items')
     .upsert(rows, { onConflict, ignoreDuplicates: true, count: 'exact' });

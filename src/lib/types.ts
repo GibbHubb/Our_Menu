@@ -28,6 +28,9 @@ export interface Recipe {
     is_public?: boolean;
     // OM14 Phase A — owner (null for legacy pre-auth rows). OM32 keys moderation on this.
     user_id?: string | null;
+    // OM14 Phase B — owning household; stamped by a DB trigger, never by the
+    // client. Null for anonymous/API-route rows, which stay visible to all.
+    household_id?: string | null;
 }
 
 // OM9 — Collection re-export for convenience

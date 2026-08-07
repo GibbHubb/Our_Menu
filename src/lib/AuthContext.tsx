@@ -25,7 +25,14 @@ const AuthCtx = createContext<AuthState>({
   signOut: async () => {},
 });
 
-const CLAIM_KEY = "om-claim-fired-v1";
+// OM14 Phase B — bumped v1 → v2 deliberately.
+//
+// The v1 flag was written in a `finally`, so a failing claim burned its one
+// chance and never retried. Migration 010's claim_orphan_data() did fail (an
+// ambiguous `table_name` reference — repaired in 016), which means every
+// browser carrying a v1 flag recorded a claim that never happened. A new key
+// gives the repaired function exactly one honest attempt per user.
+const CLAIM_KEY = "om-claim-fired-v2";
 
 async function maybeClaimOrphans(uid: string) {
   if (typeof window === "undefined") return;
@@ -34,18 +41,21 @@ async function maybeClaimOrphans(uid: string) {
   try {
     const { data, error } = await supabase.rpc("claim_orphan_data");
     if (error) {
-      // Function might not exist yet (migration 010 not run) — fail silent
-      // so the user still gets a working logged-in session.
+      // Function might not exist yet (migration 010/016 not run) — fail silent
+      // so the user still gets a working logged-in session, and leave the flag
+      // unset so the next load retries.
       console.warn("claim_orphan_data:", error.message);
-    } else if (Array.isArray(data)) {
+      return;
+    }
+    if (Array.isArray(data)) {
       const total = data.reduce((s: number, r: { claimed_count?: number }) =>
         s + (r.claimed_count ?? 0), 0);
       if (total > 0) console.info(`Claimed ${total} orphan rows for ${uid}`);
     }
+    // Only a genuinely successful claim is recorded as done.
+    localStorage.setItem(`${CLAIM_KEY}:${uid}`, "1");
   } catch (e) {
     console.warn("claim_orphan_data threw:", e);
-  } finally {
-    localStorage.setItem(`${CLAIM_KEY}:${uid}`, "1");
   }
 }
 

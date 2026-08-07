@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, ChefHat, LogIn, LogOut, User as UserIcon } from "lucide-react";
+import { Search, ChefHat, LogIn, LogOut, User as UserIcon, Users } from "lucide-react";
 import { Category } from "@/lib/types";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
@@ -64,6 +64,15 @@ export default function Header({
                             <div className="w-9 h-9 rounded-full bg-stone-100 animate-pulse" aria-hidden />
                         ) : user ? (
                             <div className="flex items-center gap-1">
+                                {/* OM14 Phase B — household management */}
+                                <Link
+                                    href="/households"
+                                    className="p-2 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-full"
+                                    title="Household"
+                                    aria-label="Household"
+                                >
+                                    <Users className="w-4 h-4" />
+                                </Link>
                                 <span
                                     className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-full text-xs font-medium"
                                     title={user.email ?? ""}
