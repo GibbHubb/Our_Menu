@@ -1,0 +1,37 @@
+# OM36 — second, independent pinger for the Supabase keepalive.
+#
+# The Vercel cron in vercel.json is the primary. This exists because the two
+# fail differently: the Vercel cron dies with a broken production deployment,
+# this one dies if GitHub disables the schedule (which it does after 60 days
+# with no repo activity — it emails first). Either one alone keeps the project
+# inside Supabase's 7-day inactivity window; running both means a single
+# silent failure does not put us back where we started.
+#
+# No secrets required while CRON_SECRET is unset on Vercel. If that env var is
+# ever added, this workflow must send it too or it will start getting 401s:
+#   curl -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" ...
+
+name: Supabase keepalive
+
+on:
+  schedule:
+    # 06:20 UTC every third day — offset from the Vercel cron so the two are
+    # visibly distinguishable in the logs.
+    - cron: '20 6 */3 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping keepalive endpoint
+        run: |
+          response=$(curl -sS -w '\n%{http_code}' https://our-menu-omega.vercel.app/api/keepalive)
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+          echo "HTTP $status"
+          echo "$body"
+          if [ "$status" != "200" ]; then
+            echo "::error::Keepalive failed with HTTP $status — the Supabase project may pause."
+            exit 1
+          fi
