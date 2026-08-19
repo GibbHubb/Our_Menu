@@ -1,7 +1,8 @@
 import { Recipe } from "@/lib/types";
 import RecipeCard from "./RecipeCard";
 import { motion, AnimatePresence } from "framer-motion";
-import { Database, AlertCircle } from "lucide-react";
+import { Database, AlertCircle, LogIn } from "lucide-react";
+import Link from "next/link";
 
 interface MasonryGridProps {
     recipes: Recipe[];
@@ -11,9 +12,16 @@ interface MasonryGridProps {
     error?: string | null;
     /** OM12 — set of recipe ids whose ingredients are fully in the pantry. */
     cookableSet?: Set<string>;
+    /**
+     * OM38 — there is no Supabase session. Every recipe is household-scoped and
+     * RLS returns nothing to anon, so an empty grid means "signed out", not
+     * "empty kitchen". Say that instead, and never offer the seed button: the
+     * insert would create a second, orphaned copy of the initial menu.
+     */
+    signedOut?: boolean;
 }
 
-export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, cookableSet }: MasonryGridProps) {
+export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, cookableSet, signedOut }: MasonryGridProps) {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
@@ -26,6 +34,29 @@ export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, c
                     Check your .env.local or Vercel Environment Variables.<br />
                     Ensure NEXT_PUBLIC_SUPABASE_URL and KEY are correct.
                 </div>
+            </div>
+        );
+    }
+
+    if (recipes.length === 0 && signedOut) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+                <div className="bg-stone-100 p-6 rounded-full mb-6">
+                    <span className="text-4xl">🔒</span>
+                </div>
+                <h3 className="text-2xl font-serif text-stone-900 mb-2">Sign in to see your menu</h3>
+                <p className="text-stone-500 max-w-md mb-8">
+                    Your recipes are still there — they&apos;re private to your household, so we
+                    need to know who you are before we can show them.
+                </p>
+
+                <Link
+                    href="/login"
+                    className="px-8 py-3 bg-stone-900 text-white rounded-full font-medium hover:bg-stone-800 transition-transform active:scale-95 flex items-center gap-2 shadow-lg"
+                >
+                    <LogIn className="w-4 h-4" />
+                    Sign in
+                </Link>
             </div>
         );
     }

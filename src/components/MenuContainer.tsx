@@ -81,7 +81,9 @@ function MenuContent() {
     const [selectedCategory, setSelectedCategory] = useState<Category | "All">(initialCategory);
     const [searchTerm, setSearchTerm] = useState(initialSearch);
     // OM14 Phase A — current user (used to stamp user_id on inserts)
-    const { user } = useAuth();
+    // OM38 — `authLoading` keeps the signed-out empty state from flashing while
+    // getSession() is still in flight.
+    const { user, loading: authLoading } = useAuth();
 
     // OM12 — pantry-driven "Cookable now" filter.
     const { keys: pantryKeys, loaded: pantryLoaded } = usePantry();
@@ -261,6 +263,13 @@ function MenuContent() {
 
     // Seed Data Handler (Dev/Setup usage)
     const handleSeedData = async () => {
+        // OM38 — the duplicate check below reads through RLS, so a signed-out
+        // caller sees zero existing titles and would insert the whole initial
+        // menu again as orphan rows. Refuse rather than seed blind.
+        if (!user) {
+            alert("Please sign in first — your menu is private to your household.");
+            return;
+        }
         if (!confirm("This will upload all initial recipes. Duplicates will be skipped. Continue?")) return;
 
         setLoading(true);
@@ -467,6 +476,7 @@ function MenuContent() {
                         onEdit={handleOpenEdit}
                         error={error}
                         cookableSet={cookableSet}
+                        signedOut={!authLoading && !user}
                     />
                 )}
             </main>
