@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { apiFetch } from "@/lib/apiFetch";
 import { Recipe } from "@/lib/types";
 import { CATEGORIES } from "@/lib/constants";
 import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Edit2, Save, MoreHorizontal, Pencil, Copy, Check, Sparkles, Loader2, AlertTriangle, ChefHat } from "lucide-react";
@@ -132,7 +133,9 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
         setExtractInfo(null);
         setShowPasteFallback(false);
         try {
-            const res = await fetch(`/api/recipes/${recipe.id}/extract`, { method: "POST" });
+            // OM35(b): apiFetch forwards the session — this route writes to
+            // `recipes`, so it must arrive as the signed-in user, not anonymously.
+            const res = await apiFetch(`/api/recipes/${recipe.id}/extract`, { method: "POST" });
             const data = await res.json();
             if (!res.ok || !data.ok) {
                 // 422 = extractor returned nothing (JSON-LD missing) → offer paste fallback

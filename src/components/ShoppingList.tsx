@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Check, Copy, HelpCircle, Loader2 } from "lucide-react";
 import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
 import { supabase } from "@/lib/supabaseClient";
+import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
 import { canonicaliseIngredient } from "@/lib/ingredients";
 import { usePantry } from "@/lib/usePantry";
 
@@ -37,7 +38,7 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
         setSubsLoading(item.id);
         setSubsError((prev) => ({ ...prev, [item.id]: '' }));
         try {
-            const res = await fetch('/api/substitutions', {
+            const res = await apiFetch('/api/substitutions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ingredient: item.name, recipeName, recipeIngredients }),

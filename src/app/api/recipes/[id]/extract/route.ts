@@ -14,7 +14,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createRequestClient } from "@/lib/supabaseServer";
 import {
     extractJsonLdOnly,
     ingredientsToShoppingList,
@@ -23,21 +23,8 @@ import {
 
 export const runtime = "nodejs"; // we need fetch + JSON parsing on the server, not edge
 
-function getServerSupabase() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key =
-        process.env.SUPABASE_SERVICE_ROLE_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !key) {
-        throw new Error(
-            "Supabase env not set (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY)",
-        );
-    }
-    return createClient(url, key);
-}
-
 export async function POST(
-    _req: Request,
+    req: Request,
     { params }: { params: Promise<{ id: string }> },
 ) {
     const { id } = await params;
@@ -45,7 +32,12 @@ export async function POST(
         return NextResponse.json({ ok: false, error: "missing id" }, { status: 400 });
     }
 
-    const supabase = getServerSupabase();
+    // OM35(b): was a SERVICE-ROLE client, which bypasses RLS — so this route
+    // would read and rewrite ANY recipe by id, for anyone who could guess a
+    // UUID. Harmless while one household existed; not once there are several.
+    // The caller's session now arrives via apiFetch and RLS decides what they
+    // may touch. An anonymous caller simply sees no row (404), which is right.
+    const supabase = createRequestClient(req);
 
     const { data: recipe, error: fetchErr } = await supabase
         .from("recipes")

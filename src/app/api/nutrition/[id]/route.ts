@@ -6,18 +6,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@supabase/supabase-js";
+import { createRequestClient } from "@/lib/supabaseServer";
 import { NUTRITION_PROMPT, hashIngredients, parseNutritionResponse } from "@/lib/nutrition";
 
 const RATE_LIMIT_SECONDS = 60;
-
-function supabase() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    // Use the service role on the server so we can bypass RLS for trusted writes.
-    // Falls back to the anon key if the service role isn't set (local dev).
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    return createClient(url, key);
-}
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     const { id } = await ctx.params;
@@ -32,7 +24,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         );
     }
 
-    const sb = supabase();
+    // OM35(b): was a SERVICE-ROLE client bypassing RLS, so any guessed recipe
+    // id was readable and writable. The caller's session now arrives via
+    // apiFetch and RLS scopes it to their own household.
+    const sb = createRequestClient(req);
     const { data: recipe, error: loadErr } = await sb
         .from("recipes")
         .select("id, title, ingredients, ingredients_hash, kcal_per_serving, nutrition_generated_at")

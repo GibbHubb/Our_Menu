@@ -3,6 +3,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Bot, User } from "lucide-react";
+import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
 
 interface Message {
     role: "user" | "assistant" | "system";
@@ -35,7 +36,7 @@ export default function AIChat() {
         setLoading(true);
 
         try {
-            const response = await fetch("/api/chat", {
+            const response = await apiFetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

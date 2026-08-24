@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef } from 'react';
+import { apiFetch } from '@/lib/apiFetch';  // OM35(b)
 
 interface Item {
     name: string;
@@ -26,7 +27,9 @@ export function ReceiptScanner({ onAddItems }: Props) {
         const fd = new FormData();
         fd.append('image', file);
         try {
-            const res = await fetch('/api/receipts/scan', { method: 'POST', body: fd });
+            // FormData: apiFetch only adds Authorization, so the browser still
+            // sets the multipart content-type + boundary itself.
+            const res = await apiFetch('/api/receipts/scan', { method: 'POST', body: fd });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Scan failed');
             if (!data.items?.length) {

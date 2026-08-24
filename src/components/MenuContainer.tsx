@@ -205,7 +205,9 @@ function MenuContent() {
     // row when Claude returns so the pill appears within a few seconds.
     const refreshNutrition = (recipe: Recipe) => {
         if (!recipe.ingredients || !recipe.ingredients.trim()) return;
-        fetch(`/api/nutrition/${recipe.id}`, { method: "POST" })
+        // OM35(b): this route writes to `recipes`, so it must arrive as the
+        // signed-in user rather than leaning on the service-role key.
+        apiFetch(`/api/nutrition/${recipe.id}`, { method: "POST" })
             .then((r) => r.ok ? r.json() : null)
             .then((body) => {
                 if (!body || body.cached) return;
@@ -374,7 +376,7 @@ function MenuContent() {
                 {searchParams.get('admin') === '1' && (
                     <button
                         onClick={async () => {
-                            await fetch('/api/recipes/embed', { method: 'POST' });
+                            await apiFetch('/api/recipes/embed', { method: 'POST' });
                             alert('Embeddings synced!');
                         }}
                         className="mt-2 text-xs px-3 py-1 border border-stone-300 rounded-full text-stone-500 hover:bg-stone-100"

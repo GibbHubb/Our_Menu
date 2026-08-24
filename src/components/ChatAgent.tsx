@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { MessageSquare, X, Send, Loader2, Bot } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
 
 interface Message {
     role: "system" | "user" | "assistant";
@@ -39,7 +40,7 @@ export default function ChatAgent() {
         setIsLoading(true);
 
         try {
-            const res = await fetch("/api/chat", {
+            const res = await apiFetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

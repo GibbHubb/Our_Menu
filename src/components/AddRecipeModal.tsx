@@ -4,6 +4,7 @@ import { Category } from "@/lib/types";
 import { SEASONS, SEASON_LABEL, type Season } from "@/lib/seasons";
 import { DIETS, DIET_LABEL, type Diet } from "@/lib/diet";  // OM30
 import { uploadRecipeImage } from "@/lib/recipeImages";  // OM25
+import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
 
 // OM10 — wider payload so URL-imported ingredients/instructions land in the same insert.
 // OM13 — seasons added to the same payload.
@@ -86,7 +87,7 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
         setImportError(null);
         setImportSource(null);
         try {
-            const res = await fetch("/api/import-url", {
+            const res = await apiFetch("/api/import-url", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url: trimmed }),
