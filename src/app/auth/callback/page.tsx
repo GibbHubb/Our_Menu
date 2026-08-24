@@ -22,15 +22,27 @@ function AuthCallbackInner() {
     const finish = async () => {
       try {
         if (code) {
+          // Legacy PKCE links already sitting in an inbox. Their verifier lives
+          // in whichever browser asked for them, so this fails on any other
+          // device — say what to do about it instead of quoting the SDK.
           const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) throw error;
+          if (error) {
+            throw new Error(
+              "This link was sent before a sign-in fix and only works in the browser that requested it. Request a fresh link — the new one works anywhere."
+            );
+          }
         } else {
-          // Hash-fragment legacy flow (older Supabase magic links): the JS
-          // SDK reads the hash automatically on detectSessionInUrl, so just
-          // make sure a session exists.
+          // Implicit flow (the default since the PKCE cross-device failure):
+          // Supabase puts the tokens — or an error — in the URL hash. The SDK
+          // reads it on detectSessionInUrl, and getSession() awaits that, so a
+          // session here means the link was good.
+          const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+          const hashError = hash.get("error_description") || hash.get("error");
+          if (hashError) throw new Error(hashError.replace(/\+/g, " "));
+
           const { data, error } = await supabase.auth.getSession();
           if (error) throw error;
-          if (!data.session) throw new Error("No session — link may have expired.");
+          if (!data.session) throw new Error("No session — the link may have expired. Sign-in links are valid for 1 hour.");
         }
         router.replace(next);
       } catch (err) {
