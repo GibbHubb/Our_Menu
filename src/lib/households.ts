@@ -98,11 +98,83 @@ export async function createInvite(): Promise<string> {
   return data as string;
 }
 
-/** Redeems an invite code; resolves to the household id joined. */
+/**
+ * Redeems an invite code; resolves to the household id joined.
+ *
+ * OM35(d): this now grants MEMBERSHIP ONLY and activates the joined household.
+ * It used to also absorb the joiner's own kitchen and delete it — irreversibly,
+ * since a leaver's rows stay behind. Moving your recipes across is
+ * `mergeHouseholdInto`, asked for separately.
+ */
 export async function acceptInvite(code: string): Promise<string> {
   const { data, error } = await supabase.rpc('accept_invite', { p_code: code });
   if (error) throw new Error(error.message);
   return data as string;
+}
+
+/** What a merge into `householdId` would move out of the caller's own kitchen. */
+export interface MergePreview {
+  sourceHousehold: string;
+  recipes:     number;
+  cookLog:     number;
+  mealPlans:   number;
+  collections: number;
+  pantryItems: number;
+}
+
+/** True when there is anything at all to move. */
+export function mergePreviewIsEmpty(rows: MergePreview[]): boolean {
+  return rows.every(
+    (r) => r.recipes + r.cookLog + r.mealPlans + r.collections + r.pantryItems === 0,
+  );
+}
+
+/**
+ * Counts of what `mergeHouseholdInto` would transfer — per table, deliberately
+ * not as a single total. "Everything you own" is not a number anyone can
+ * meaningfully consent to.
+ */
+export async function previewMerge(householdId: string): Promise<MergePreview[]> {
+  const { data, error } = await supabase.rpc('preview_merge_household', {
+    p_target: householdId,
+  });
+  if (error) { console.error('previewMerge:', error); return []; }
+  const rows = (data ?? []) as Array<{
+    source_household: string;
+    recipes: number; cook_log: number; meal_plans: number;
+    collections: number; pantry_items: number;
+  }>;
+  return rows.map((r) => ({
+    sourceHousehold: r.source_household,
+    recipes:     Number(r.recipes),
+    cookLog:     Number(r.cook_log),
+    mealPlans:   Number(r.meal_plans),
+    collections: Number(r.collections),
+    pantryItems: Number(r.pantry_items),
+  }));
+}
+
+/**
+ * Moves the caller's own solo household(s) into `householdId` and deletes them.
+ *
+ * ⚠️ Not reversible. A leaver's rows stay with the household, so this cannot be
+ * undone by leaving afterwards. Always show `previewMerge` first.
+ */
+export async function mergeHouseholdInto(householdId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('merge_household_into', {
+    p_target: householdId,
+  });
+  if (error) throw new Error(error.message);
+  return (data as number) ?? 0;
+}
+
+/** Switch which household new recipes land in. Reversible, moves nothing. */
+export async function setActiveHousehold(householdId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('set_active_household', {
+    p_household: householdId,
+  });
+  if (error) { console.error('setActiveHousehold:', error); return null; }
+  return (data as string) ?? null;
 }
 
 /**
