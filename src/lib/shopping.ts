@@ -132,6 +132,13 @@ export async function clearTicks(): Promise<void> {
 
 // ── the list itself ─────────────────────────────────────────────────────────
 
+/**
+ * Ingredient lines that are instructions in disguise. Kept deliberately short —
+ * over-filtering silently drops something you needed to buy, which is far worse
+ * than a slightly odd line on the list.
+ */
+const NOT_SHOPPING = /^[-*•\s\d.,/½¼¾]*(cups?|cup of|ml|litres?)?\s*(pasta |starchy |reserved )?(cooking )?water\b|^[-*•\s]*ice\b|^[-*•\s]*water\b/i;
+
 export interface BuiltList {
     lines: ShoppingLine[];
     /** Dishes whose ingredients carry no usable quantities at all. */
@@ -162,7 +169,10 @@ export function buildList(basket: BasketRow[]): BuiltList {
             .map((l) => l.trim())
             .filter(Boolean)
             // Drop section headings ("For the sauce:") — they are not shopping.
-            .filter((l) => !/^[-*•\s]*[^:]{0,40}:$/.test(l));
+            .filter((l) => !/^[-*•\s]*[^:]{0,40}:$/.test(l))
+            // …and things nobody buys. "1.5 pasta cooking water" on a shopping
+            // list is noise that makes the real lines harder to scan.
+            .filter((l) => !NOT_SHOPPING.test(l));
 
         let parsedAny = false;
         for (const line of lines) {

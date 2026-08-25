@@ -165,7 +165,12 @@ export function parseIngredient(raw: string): ParsedIngredient {
 
     // A word that isn't a unit belongs to the item ("2 garlic cloves" parses as
     // qty 2 + item "garlic cloves", not unit "garlic").
-    const item = (def ? m[3] : [m[2], m[3]].filter(Boolean).join(" ")).replace(/\s+/g, " ").trim();
+    const item = (def ? m[3] : [m[2], m[3]].filter(Boolean).join(" "))
+        .replace(/\s+/g, " ")
+        // Pulling "(, fresh (1 orange))" out of the line leaves the comma that
+        // introduced it behind — "guanciale ," on the shopping list.
+        .replace(/^[\s,;.·-]+|[\s,;.·-]+$/g, "")
+        .trim();
 
     return {
         qty,
