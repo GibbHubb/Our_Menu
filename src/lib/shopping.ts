@@ -14,6 +14,23 @@
 
 import { supabase } from './supabaseClient';
 import { canonicaliseIngredient } from './ingredients';
+
+/**
+ * OM41 — the key two lines must share to become one line on the list.
+ *
+ * `canonicaliseIngredient` already drops quantities, units, prep notes and
+ * anything after a comma. What it keeps is the alternative: "spaghetti or
+ * other pasta, long or short" and plain "spaghetti" stayed two entries on the
+ * same shopping list. A recipe writer offering you a choice is still one thing
+ * to buy, so cut at the choice and keep the first option.
+ */
+export function shoppingKey(name: string): string {
+    const head = name
+        .split(/\bor\b/i)[0]   // word boundaries matter: a bare /or/ turns "coriander" into "c"
+        .split('/')[0]                  // "cilantro/coriander"       -> "cilantro"
+        .split(',')[0];
+    return canonicaliseIngredient(head) || canonicaliseIngredient(name) || name.trim().toLowerCase();
+}
 import { parseIngredient, scale, aggregate, type ShoppingLine } from './quantity';
 
 export interface BasketRow {
@@ -186,7 +203,7 @@ export function buildList(basket: BasketRow[]): BuiltList {
         let parsedAny = false;
         for (const line of lines) {
             const parsed = scale(parseIngredient(line), factor);
-            const key = canonicaliseIngredient(parsed.item) || parsed.item || line.toLowerCase();
+            const key = shoppingKey(parsed.item || line);
             if (excluded.has(key) || excluded.has(canonicaliseIngredient(line))) continue;
             if (parsed.qty !== null) parsedAny = true;
             entries.push({ parsed, source: recipe.title, key });
@@ -200,5 +217,5 @@ export function buildList(basket: BasketRow[]): BuiltList {
 
 /** Stable key for tick state — survives servings changes and re-aggregation. */
 export function lineKey(line: ShoppingLine): string {
-    return canonicaliseIngredient(line.item) || line.item;
+    return shoppingKey(line.item);
 }
