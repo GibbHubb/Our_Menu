@@ -1,10 +1,11 @@
 "use client";
 
-import { Search, ChefHat, LogIn, LogOut, User as UserIcon, Users, ShoppingCart, Refrigerator } from "lucide-react";
+import { Search, ChefHat, LogIn, LogOut, User as UserIcon, Users } from "lucide-react";
 import { Category } from "@/lib/types";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 import { useUnitSystem } from "@/lib/useUnitSystem";  // OM27
+import PrimaryNav from "./PrimaryNav";  // OM42
 
 interface HeaderProps {
     categories: Category[];
@@ -26,6 +27,7 @@ export default function Header({
     return (
         <header className="sticky top-0 z-50 bg-stone-50/95 backdrop-blur-md border-b border-stone-200 shadow-sm transition-all">
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-4">
+                {/* OM42 — Recipes / Pantry / Shopping list, the app's three modes */}
                 {/* Top Row: Logo & Search */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -64,23 +66,6 @@ export default function Header({
                             <div className="w-9 h-9 rounded-full bg-stone-100 animate-pulse" aria-hidden />
                         ) : user ? (
                             <div className="flex items-center gap-1">
-                                {/* OM40 — the two tabs the weekly shop runs on */}
-                                <Link
-                                    href="/shopping"
-                                    className="p-2 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-full"
-                                    title="Shopping list"
-                                    aria-label="Shopping list"
-                                >
-                                    <ShoppingCart className="w-4 h-4" />
-                                </Link>
-                                <Link
-                                    href="/pantry"
-                                    className="p-2 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-full"
-                                    title="Pantry"
-                                    aria-label="Pantry"
-                                >
-                                    <Refrigerator className="w-4 h-4" />
-                                </Link>
                                 {/* OM14 Phase B — household management */}
                                 <Link
                                     href="/households"
@@ -118,7 +103,11 @@ export default function Header({
                     </div>
                 </div>
 
-                {/* Bottom Row: Category Chips */}
+                {/* OM42 — the three modes, above the recipe-only chips so it is
+                    obvious the chips belong to Recipes and nothing else. */}
+                <PrimaryNav />
+
+                {/* Bottom Row: Category Chips (Recipes only) */}
                 <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mask-gradient">
                     <button
                         onClick={() => onSelectCategory("All")}

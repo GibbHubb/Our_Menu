@@ -20,6 +20,8 @@ export interface BasketRow {
     id: string;
     recipe_id: string;
     servings: number;
+    /** OM42 — canonical keys the user unticked when adding the dish. */
+    excluded?: string[] | null;
     recipes: {
         id: string;
         title: string;
@@ -40,7 +42,7 @@ export interface ExtraRow {
 export async function getBasket(): Promise<BasketRow[]> {
     const { data, error } = await supabase
         .from('meal_basket')
-        .select('id, recipe_id, servings, recipes(id, title, image_url, ingredients, servings)')
+        .select('id, recipe_id, servings, excluded, recipes(id, title, image_url, ingredients, servings)')
         .order('created_at');
     if (error) { console.error('getBasket:', error); return []; }
     // PostgREST widens a to-one embed to an array in the generated types.
@@ -55,10 +57,14 @@ export async function getBasket(): Promise<BasketRow[]> {
  * creating a second row — the unique index in 020 enforces the same thing at
  * the DB, so a double-click can't produce two entries to reconcile.
  */
-export async function addToBasket(recipeId: string, servings: number): Promise<boolean> {
+export async function addToBasket(
+    recipeId: string,
+    servings: number,
+    excluded: string[] = [],
+): Promise<boolean> {
     const { error } = await supabase
         .from('meal_basket')
-        .upsert({ recipe_id: recipeId, servings }, { onConflict: 'household_id,recipe_id' });
+        .upsert({ recipe_id: recipeId, servings, excluded }, { onConflict: 'household_id,recipe_id' });
     if (error) { console.error('addToBasket:', error); return false; }
     return true;
 }
@@ -174,11 +180,15 @@ export function buildList(basket: BasketRow[]): BuiltList {
             // list is noise that makes the real lines harder to scan.
             .filter((l) => !NOT_SHOPPING.test(l));
 
+        // OM42 — what the user unticked on the recipe page stays off the list.
+        const excluded = new Set(row.excluded ?? []);
+
         let parsedAny = false;
         for (const line of lines) {
             const parsed = scale(parseIngredient(line), factor);
-            if (parsed.qty !== null) parsedAny = true;
             const key = canonicaliseIngredient(parsed.item) || parsed.item || line.toLowerCase();
+            if (excluded.has(key) || excluded.has(canonicaliseIngredient(line))) continue;
+            if (parsed.qty !== null) parsedAny = true;
             entries.push({ parsed, source: recipe.title, key });
         }
         if (lines.length && !parsedAny) unscalable.push(recipe.title);

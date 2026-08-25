@@ -2,12 +2,14 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Check, Copy, HelpCircle, Loader2 } from "lucide-react";
+import { Check, Copy, HelpCircle, Loader2, ShoppingCart, ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
 import { supabase } from "@/lib/supabaseClient";
 import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
 import { canonicaliseIngredient } from "@/lib/ingredients";
 import { usePantry } from "@/lib/usePantry";
+import { addToBasket } from "@/lib/shopping";  // OM42
 
 interface Substitution { name: string; note: string; }
 
@@ -19,9 +21,11 @@ interface ShoppingListProps {
     checkedMap?: Record<string, boolean>;
     recipeName?: string;
     recipeIngredients?: string;
+    /** OM42 — the recipe's own yield, so the scale can be shown as servings. */
+    baseServings?: number | null;
 }
 
-export default function ShoppingList({ initialList, scale, setScale, recipeId, checkedMap, recipeName, recipeIngredients }: ShoppingListProps) {
+export default function ShoppingList({ initialList, scale, setScale, recipeId, checkedMap, recipeName, recipeIngredients, baseServings }: ShoppingListProps) {
     const [items, setItems] = useState<ParsedItem[]>([]);
     const [showCopied, setShowCopied] = useState(false);
     const [checked, setChecked] = useState<Record<string, boolean>>(checkedMap ?? {});
@@ -32,6 +36,12 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
     const [subs, setSubs] = useState<Record<string, Substitution[]>>({});
     const [subsLoading, setSubsLoading] = useState<string | null>(null);
     const [subsError, setSubsError] = useState<Record<string, string>>({});
+    // OM42 — which lines go on the shopping list. Everything you don't already
+    // have starts selected; pantry staples start off. Max, 2026-08-25:
+    // "everything but the pantry to be selected".
+    const [excluded, setExcluded] = useState<Set<string>>(new Set());
+    const [adding, setAdding] = useState(false);
+    const [added, setAdded] = useState(false);
 
     const fetchSubstitutions = async (item: ParsedItem) => {
         if (subsLoading) return;
@@ -128,13 +138,53 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
         return pantryKeys.has(canonicaliseIngredient(item.name));
     }, [pantryKeys, pantryLoaded]);
 
+    // OM42 — "selected" means "put this on the shopping list". The default is
+    // everything you do NOT already have; pantry staples start off. Before this,
+    // an item that was neither in the pantry nor ticked rendered struck-through
+    // and faded — i.e. the things you actually needed to buy looked like the
+    // ones you could ignore.
+    const isSelected = useCallback((item: ParsedItem) => {
+        const key = canonicaliseIngredient(item.name) || checkedKey(item.name);
+        if (excluded.has(key)) return false;
+        return !isInPantry(item);
+    }, [excluded, isInPantry]);
+
+    const toggleSelected = useCallback((item: ParsedItem) => {
+        const key = canonicaliseIngredient(item.name) || checkedKey(item.name);
+        setExcluded((prev) => {
+            const next = new Set(prev);
+            // Unticking a normal item excludes it; ticking a pantry item means
+            // "actually, buy this too", which is the same switch inverted.
+            if (isSelected(item)) next.add(key); else next.delete(key);
+            return next;
+        });
+    }, [isSelected]);
+
+    /** OM42 — servings the scale slider currently represents. */
+    const scaledServings = baseServings && baseServings > 0
+        ? Math.max(1, Math.round(baseServings * scale))
+        : null;
+
+    const selectedItems = items.filter(isSelected);
+
+    const handleAddToList = async () => {
+        if (!recipeId) return;
+        setAdding(true);
+        const keys = items
+            .filter((i) => !isSelected(i))
+            .map((i) => canonicaliseIngredient(i.name) || checkedKey(i.name))
+            .filter(Boolean);
+        const ok = await addToBasket(recipeId, scaledServings ?? Math.max(1, Math.round(4 * scale)), keys);
+        setAdding(false);
+        if (ok) { setAdded(true); setTimeout(() => setAdded(false), 3000); }
+    };
+
     const handleCopy = () => {
         const textLines: string[] = [];
         const htmlLines: string[] = [];
 
         items
-            .filter(item => checked[checkedKey(item.name)])
-            .filter(item => !isInPantry(item))
+            .filter(isSelected)
             .forEach(item => {
             let text = item.name;
             if (item.quantity !== null) {
@@ -199,6 +249,11 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {scaledServings && (
+                        <span className="text-xs text-stone-500 mr-1">
+                            = {scaledServings} serving{scaledServings === 1 ? '' : 's'}
+                        </span>
+                    )}
                     <button
                         onClick={handleCopy}
                         className="flex items-center gap-2 bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-stone-800 transition-all active:scale-95"
@@ -209,50 +264,77 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                 </div>
             </div>
 
+            {/* OM42 — one way to get these onto the shopping list. The recipe
+                page used to carry this list AND a separate "Add to list" panel
+                that ignored it; Max: "see how we have done it twice". */}
+            {recipeId && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <button
+                        onClick={() => void handleAddToList()}
+                        disabled={adding || selectedItems.length === 0}
+                        className={`flex-1 min-w-[220px] py-2.5 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${
+                            added ? 'bg-emerald-600 text-white' : 'bg-stone-900 text-white hover:bg-stone-800'
+                        }`}
+                    >
+                        {adding ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : added ? <Check className="w-4 h-4" />
+                            : <ShoppingCart className="w-4 h-4" />}
+                        {added
+                            ? 'Added to the shopping list'
+                            : `Add ${selectedItems.length} item${selectedItems.length === 1 ? '' : 's'} to shopping list`}
+                    </button>
+                    <Link
+                        href="/shopping"
+                        className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-stone-100 text-stone-700 hover:bg-stone-200 flex items-center gap-1.5"
+                    >
+                        Shopping list <ArrowRight className="w-4 h-4" />
+                    </Link>
+                </div>
+            )}
+
             {/* List */}
             <div className="space-y-2">
                 {items.map((item) => {
                     const displayQty = item.quantity !== null
                         ? formatQuantity(item.quantity * scale)
                         : null;
-                    const isChecked = !!checked[checkedKey(item.name)];
                     const itemSubs = subs[item.id];
                     const itemSubError = subsError[item.id];
                     const isLoadingSubs = subsLoading === item.id;
                     const inPantry = isInPantry(item);
+                    const selected = isSelected(item);
 
                     return (
                         <div key={item.id}>
                             <div
-                                onClick={() => handleToggle(item)}
+                                onClick={() => toggleSelected(item)}
                                 className={`
-                                    cursor-pointer group flex items-start gap-3 p-3 rounded-lg transition-colors select-none
-                                    ${inPantry ? 'bg-amber-50/40 border-amber-100' : isChecked ? 'bg-emerald-50/50 border-emerald-100' : 'bg-white hover:bg-stone-50 border-transparent'}
-                                    border
+                                    cursor-pointer group flex items-start gap-3 p-3 rounded-lg transition-colors select-none border
+                                    ${selected
+                                        ? 'bg-white hover:bg-stone-50 border-stone-200'
+                                        : 'bg-stone-50/60 border-transparent'}
                                 `}
                             >
                                 <div className={`
                                     flex-shrink-0 mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors
-                                    ${inPantry
-                                        ? 'bg-amber-400 border-amber-400 text-white'
-                                        : isChecked
-                                            ? 'bg-emerald-500 border-emerald-500 text-white'
-                                            : 'bg-white border-stone-300 group-hover:border-emerald-400'}
+                                    ${selected
+                                        ? 'bg-emerald-600 border-emerald-600 text-white'
+                                        : 'bg-white border-stone-300 group-hover:border-emerald-400'}
                                 `}>
-                                    {(inPantry || isChecked) && <Check className="w-3.5 h-3.5" />}
+                                    {selected && <Check className="w-3.5 h-3.5" />}
                                 </div>
 
-                                <div className={`flex-1 text-sm leading-snug ${isChecked || inPantry ? 'text-stone-900' : 'text-stone-500'}`}>
+                                <div className={`flex-1 text-sm leading-snug ${selected ? 'text-stone-900' : 'text-stone-400'}`}>
                                     {displayQty && <span className="font-bold mr-1.5">{displayQty}</span>}
-                                    <span className={isChecked && !inPantry ? '' : (inPantry ? 'line-through decoration-amber-400/70' : 'line-through opacity-70')}>
+                                    <span className={selected ? '' : 'line-through decoration-stone-300'}>
                                         {item.name}
                                     </span>
                                     {inPantry && (
-                                        <span className="ml-2 text-[10px] uppercase font-bold tracking-widest text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                                        <span className="ml-2 text-[10px] uppercase font-bold tracking-widest text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
                                             In pantry
                                         </span>
                                     )}
-                                    {!inPantry && item.isStandard && (
+                                {!inPantry && item.isStandard && (
                                         <span className="ml-2 text-[10px] uppercase font-bold tracking-widest text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
                                             Pantry
                                         </span>

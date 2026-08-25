@@ -22,6 +22,7 @@ import {
     type BasketRow, type ExtraRow,
 } from "@/lib/shopping";
 import { getPantryItems, setPantryNeeded, type PantryItem } from "@/lib/pantry";
+import PrimaryNav from "@/components/PrimaryNav";  // OM42
 
 export default function ShoppingPage() {
     const router = useRouter();
@@ -33,6 +34,10 @@ export default function ShoppingPage() {
     const [ticks, setTicks] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
     const [draft, setDraft] = useState("");
+    // OM42 — Max: "they should be on need to buy until they are ticked off and
+    // then they should be removed". Ticked lines leave the list; this reveals
+    // them again, because "removed" must not mean "unrecoverable".
+    const [showDone, setShowDone] = useState(false);
 
     // Every setState happens after the await: touching state synchronously in
     // the effect below trips react-hooks/set-state-in-effect, and the page
@@ -88,22 +93,19 @@ export default function ShoppingPage() {
     return (
         <div className="min-h-screen bg-stone-50">
             <header className="sticky top-0 z-40 bg-stone-50/95 backdrop-blur-md border-b border-stone-200">
-                <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-                    <Link href="/" className="p-2 -ml-2 text-stone-500 hover:bg-stone-100 rounded-full">
-                        <ArrowLeft className="w-5 h-5" />
-                    </Link>
-                    <div className="p-2 bg-stone-900 rounded-full">
-                        <ShoppingCart className="w-5 h-5 text-stone-50" />
+                <div className="max-w-3xl mx-auto px-4 py-3 space-y-3">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-stone-900 rounded-full">
+                            <ShoppingCart className="w-5 h-5 text-stone-50" />
+                        </div>
+                        <div className="flex-1">
+                            <h1 className="font-serif text-2xl text-stone-900 leading-tight">Shopping List</h1>
+                            <p className="text-xs text-stone-500">
+                                {outstanding === 0 ? "Nothing left to buy" : `${outstanding} still to get`}
+                            </p>
+                        </div>
                     </div>
-                    <div className="flex-1">
-                        <h1 className="font-serif text-2xl text-stone-900 leading-tight">Shopping List</h1>
-                        <p className="text-xs text-stone-500">
-                            {outstanding === 0 ? "Nothing left to buy" : `${outstanding} still to get`}
-                        </p>
-                    </div>
-                    <Link href="/pantry" className="text-xs font-semibold text-stone-600 hover:text-stone-900 underline underline-offset-4">
-                        Pantry →
-                    </Link>
+                    <PrimaryNav />
                 </div>
             </header>
 
@@ -168,14 +170,24 @@ export default function ShoppingPage() {
                     <section>
                         <div className="flex items-center justify-between mb-3">
                             <h2 className="text-xs font-bold uppercase tracking-wider text-stone-500">
-                                Ingredients ({lines.length})
+                                Ingredients ({lines.filter((l) => !ticks.has(lineKey(l))).length} to get)
                             </h2>
-                            <button
-                                onClick={async () => { await clearTicks(); setTicks(new Set()); }}
-                                className="text-xs text-stone-400 hover:text-stone-900 flex items-center gap-1"
-                            >
-                                <RotateCcw className="w-3 h-3" /> untick all
-                            </button>
+                            <div className="flex items-center gap-3">
+                                {ticks.size > 0 && (
+                                    <button
+                                        onClick={() => setShowDone((v) => !v)}
+                                        className="text-xs text-stone-500 hover:text-stone-900 underline underline-offset-2"
+                                    >
+                                        {showDone ? "hide" : "show"} {ticks.size} in the basket
+                                    </button>
+                                )}
+                                <button
+                                    onClick={async () => { await clearTicks(); setTicks(new Set()); }}
+                                    className="text-xs text-stone-400 hover:text-stone-900 flex items-center gap-1"
+                                >
+                                    <RotateCcw className="w-3 h-3" /> start over
+                                </button>
+                            </div>
                         </div>
 
                         {unscalable.length > 0 && (
@@ -189,7 +201,9 @@ export default function ShoppingPage() {
                         )}
 
                         <ul className="bg-white border border-stone-100 rounded-2xl divide-y divide-stone-100 overflow-hidden">
-                            {lines.map((line) => {
+                            {lines
+                                .filter((line) => showDone || !ticks.has(lineKey(line)))
+                                .map((line) => {
                                 const key = lineKey(line);
                                 const done = ticks.has(key);
                                 return (

@@ -11,7 +11,40 @@ export interface PantryItem {
   added_at: string;
   /** OM40 — "we're low on this"; shows up under Staples on the shopping list. */
   needed: boolean;
+  /** OM42 — kitchen | bathroom | household. Only kitchen counts as cookable. */
+  category: PantryCategory;
 }
+
+export type PantryCategory = 'kitchen' | 'bathroom' | 'household';
+
+export const PANTRY_SECTIONS: Array<{ key: PantryCategory; label: string; hint: string }> = [
+  { key: 'kitchen',   label: 'Kitchen',   hint: 'Food and cooking staples — these are what "Cookable now" checks against.' },
+  { key: 'bathroom',  label: 'Bathroom',  hint: 'Toothpaste, shampoo, loo roll.' },
+  { key: 'household', label: 'Household', hint: 'Washing powder, bin bags, cleaning.' },
+];
+
+/**
+ * OM42 — the things you buy again and again. Offered as a one-click import so
+ * a new pantry isn't 40 rounds of typing. Adding is idempotent: a canonical key
+ * that already exists is skipped, so pressing it twice changes nothing.
+ */
+export const COMMON_STAPLES: Record<PantryCategory, string[]> = {
+  kitchen: [
+    'Olive oil', 'Vegetable oil', 'Salt', 'Black pepper', 'Plain flour', 'Sugar',
+    'Rice', 'Pasta', 'Tinned tomatoes', 'Onions', 'Garlic', 'Butter', 'Milk',
+    'Eggs', 'Stock cubes', 'Soy sauce', 'Vinegar', 'Honey', 'Oats', 'Coffee',
+    'Tea', 'Baking powder', 'Cornflour', 'Mustard', 'Mayonnaise', 'Tomato paste',
+  ],
+  bathroom: [
+    'Toothpaste', 'Toothbrush heads', 'Shampoo', 'Conditioner', 'Shower gel',
+    'Deodorant', 'Toilet paper', 'Hand soap', 'Razors', 'Floss', 'Moisturiser',
+  ],
+  household: [
+    'Washing powder', 'Fabric softener', 'Dishwasher tablets', 'Washing-up liquid',
+    'Bin bags', 'Kitchen roll', 'Sponges', 'Surface cleaner', 'Bleach',
+    'Tin foil', 'Cling film', 'Batteries', 'Light bulbs',
+  ],
+};
 
 /**
  * OM40 — flag/unflag a staple as needing to be bought.
@@ -44,13 +77,16 @@ async function currentUserId(): Promise<string | null> {
 }
 
 /** Insert one pantry item; returns null if the canonical key already exists. */
-export async function addPantryItem(displayName: string): Promise<PantryItem | null> {
+export async function addPantryItem(
+  displayName: string,
+  category: PantryCategory = 'kitchen',
+): Promise<PantryItem | null> {
   const key = canonicaliseIngredient(displayName);
   if (!key) return null;
   const uid = await currentUserId();
   const row = uid
-    ? { canonical_key: key, display_name: displayName.trim(), user_id: uid }
-    : { canonical_key: key, display_name: displayName.trim() };
+    ? { canonical_key: key, display_name: displayName.trim(), category, user_id: uid }
+    : { canonical_key: key, display_name: displayName.trim(), category };
   const { data, error } = await supabase
     .from('pantry_items')
     .insert([row])
@@ -123,4 +159,25 @@ export function isCookableNow(ingredients: string | undefined | null, pantryKeys
   const keys = recipeIngredientKeys(ingredients);
   if (!keys.length) return false;
   return keys.every((k) => pantryKeys.has(k));
+}
+
+
+/** OM42 — move an item between sections. */
+export async function setPantryCategory(id: string, category: PantryCategory): Promise<void> {
+  const { error } = await supabase.from('pantry_items').update({ category }).eq('id', id);
+  if (error) console.error('setPantryCategory:', error);
+}
+
+/**
+ * OM42 — import the common staples for one section. Returns how many were
+ * actually new; duplicates are skipped by the canonical-key unique index, so
+ * this is safe to run against a pantry that is already half full.
+ */
+export async function importCommonStaples(category: PantryCategory): Promise<number> {
+  let added = 0;
+  for (const name of COMMON_STAPLES[category]) {
+    const row = await addPantryItem(name, category);
+    if (row) added++;
+  }
+  return added;
 }
