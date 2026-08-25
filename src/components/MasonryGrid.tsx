@@ -1,7 +1,7 @@
 import { Recipe } from "@/lib/types";
 import RecipeCard from "./RecipeCard";
 import { motion, AnimatePresence } from "framer-motion";
-import { Database, AlertCircle, LogIn } from "lucide-react";
+import { Database, AlertCircle, LogIn, FilterX } from "lucide-react";
 import Link from "next/link";
 
 interface MasonryGridProps {
@@ -19,9 +19,19 @@ interface MasonryGridProps {
      * insert would create a second, orphaned copy of the initial menu.
      */
     signedOut?: boolean;
+    /**
+     * OM39 — how many recipes exist BEFORE filtering. An empty grid with a
+     * non-empty kitchen means the filters excluded everything, which is a very
+     * different message — and must never offer the seed button. Bron hit the
+     * "Kitchen is Empty" state by ticking two filter chips and seeded 82
+     * duplicate recipes from it.
+     */
+    totalCount?: number;
+    /** OM39 — clears every active filter; shown with the no-matches state. */
+    onClearFilters?: () => void;
 }
 
-export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, cookableSet, signedOut }: MasonryGridProps) {
+export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, cookableSet, signedOut, totalCount, onClearFilters }: MasonryGridProps) {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
@@ -57,6 +67,32 @@ export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, c
                     <LogIn className="w-4 h-4" />
                     Sign in
                 </Link>
+            </div>
+        );
+    }
+
+    // OM39 — filters excluded everything, but the kitchen is full. Say so, and
+    // offer the way out rather than a button that duplicates the whole menu.
+    if (recipes.length === 0 && (totalCount ?? 0) > 0) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+                <div className="bg-stone-100 p-6 rounded-full mb-6">
+                    <span className="text-4xl">🔍</span>
+                </div>
+                <h3 className="text-2xl font-serif text-stone-900 mb-2">Nothing matches those filters</h3>
+                <p className="text-stone-500 max-w-md mb-8">
+                    You have {totalCount} recipes — none of them fit this combination.
+                    Diet and season chips only match recipes that have been tagged.
+                </p>
+                {onClearFilters && (
+                    <button
+                        onClick={onClearFilters}
+                        className="px-8 py-3 bg-stone-900 text-white rounded-full font-medium hover:bg-stone-800 transition-transform active:scale-95 flex items-center gap-2 shadow-lg"
+                    >
+                        <FilterX className="w-4 h-4" />
+                        Clear filters
+                    </button>
+                )}
             </div>
         );
     }

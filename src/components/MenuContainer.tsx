@@ -94,6 +94,16 @@ function MenuContent() {
     // OM30 — diet filter (single-select; null = no diet constraint)
     const [dietFilter, setDietFilter] = useState<Diet | null>(null);
 
+    // OM39 — one way out of a filter combination that matches nothing.
+    const clearFilters = () => {
+        setCookableOnly(false);
+        setInSeasonOnly(false);
+        setDietFilter(null);
+        setSelectedCollectionId(null);
+        setSelectedCategory("All");
+        setSearchTerm("");
+    };
+
     // Sync state to URL
     useEffect(() => {
         const params = new URLSearchParams();
@@ -479,6 +489,8 @@ function MenuContent() {
                         error={error}
                         cookableSet={cookableSet}
                         signedOut={!authLoading && !user}
+                        totalCount={recipes.length}
+                        onClearFilters={clearFilters}
                     />
                 )}
             </main>
