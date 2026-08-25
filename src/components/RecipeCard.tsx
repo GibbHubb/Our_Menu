@@ -4,6 +4,7 @@ import { Link2, Pencil, ChefHat } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { isSeasonHighlight, currentSeason, SEASON_LABEL, type Season } from "@/lib/seasons";
+import AddToListButton from "./AddToListButton";  // OM40
 
 interface RecipeCardProps {
     recipe: Recipe;
@@ -82,6 +83,11 @@ export default function RecipeCard({ recipe, onEdit, cookableNow }: RecipeCardPr
                                 +{recipe.category.length - 2}
                             </span>
                         )}
+                    </div>
+
+                    {/* OM40 — quick add to the shopping list at the recipe's own yield */}
+                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                        <AddToListButton recipeId={recipe.id} baseServings={recipe.servings} variant="icon" />
                     </div>
 
                     {/* OM12 — cookable-now badge (top-right, distinct from edit/link affordances) */}

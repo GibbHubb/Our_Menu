@@ -15,6 +15,7 @@ import ShoppingListComp from "@/components/ShoppingList";
 import IngredientList from "@/components/IngredientList";
 import { ReceiptScanner } from "@/components/ReceiptScanner";
 import { SEASON_COLOR, SEASON_LABEL, type Season } from "@/lib/seasons";
+import AddToListButton from "@/components/AddToListButton";  // OM40
 
 export default function RecipePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -287,6 +288,16 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                             {loggingCook ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                             Made it today
                         </button>
+                    </div>
+
+                    {/* OM40 — dish + servings straight onto the shopping list */}
+                    <div className="bg-white rounded-xl border border-stone-200 px-4 py-3 shadow-sm space-y-2">
+                        <p className="text-xs text-stone-500">
+                            {recipe.servings
+                                ? `This recipe serves ${recipe.servings} — quantities scale to whatever you pick.`
+                                : "No serving count on file for this one, so quantities go on the list as written."}
+                        </p>
+                        <AddToListButton recipeId={recipe.id} baseServings={recipe.servings} />
                     </div>
 
                     {/* Extract Recipe — only when all three content fields are empty AND we have a link */}

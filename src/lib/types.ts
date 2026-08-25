@@ -24,6 +24,11 @@ export interface Recipe {
     seasons?: string[];
     // OM30 — diet tags ('vegetarian' | 'vegan' | 'gluten-free' | 'dairy-free'); empty = untagged
     diet?: string[];
+    // OM40 — the diet tags above were inferred from the ingredients, not set by
+    // a human. The UI must say so: a wrong 'gluten-free' matters.
+    diet_auto?: boolean;
+    // OM40 — base yield from the source page; null = unknown, quantities scale ×1.
+    servings?: number | null;
     // OM29 — owner has opted this recipe into the public /r/[id] share + reviews page.
     is_public?: boolean;
     // OM14 Phase A — owner (null for legacy pre-auth rows). OM32 keys moderation on this.

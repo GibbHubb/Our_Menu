@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, ChefHat, LogIn, LogOut, User as UserIcon, Users } from "lucide-react";
+import { Search, ChefHat, LogIn, LogOut, User as UserIcon, Users, ShoppingCart, Refrigerator } from "lucide-react";
 import { Category } from "@/lib/types";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
@@ -64,6 +64,23 @@ export default function Header({
                             <div className="w-9 h-9 rounded-full bg-stone-100 animate-pulse" aria-hidden />
                         ) : user ? (
                             <div className="flex items-center gap-1">
+                                {/* OM40 — the two tabs the weekly shop runs on */}
+                                <Link
+                                    href="/shopping"
+                                    className="p-2 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-full"
+                                    title="Shopping list"
+                                    aria-label="Shopping list"
+                                >
+                                    <ShoppingCart className="w-4 h-4" />
+                                </Link>
+                                <Link
+                                    href="/pantry"
+                                    className="p-2 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-full"
+                                    title="Pantry"
+                                    aria-label="Pantry"
+                                >
+                                    <Refrigerator className="w-4 h-4" />
+                                </Link>
                                 {/* OM14 Phase B — household management */}
                                 <Link
                                     href="/households"

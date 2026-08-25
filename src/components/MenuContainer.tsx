@@ -444,13 +444,24 @@ function MenuContent() {
                                     ? "bg-emerald-600 text-white border-emerald-600"
                                     : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
                             }`}
-                            title={`Show only recipes tagged ${DIET_LABEL[d]} (untagged recipes are hidden)`}
+                            title={`Show only recipes tagged ${DIET_LABEL[d]} — auto-detected from the ingredient list, so check before trusting it for an allergy`}
                         >
                             {DIET_LABEL[d]}
                         </button>
                     );
                 })}
             </div>
+
+            {/* OM40 — these tags were written by a keyword pass over the
+                ingredients, not by a person. Hidden gluten in a stock cube is
+                exactly what it cannot see, so say so rather than imply a check
+                that never happened. */}
+            {dietFilter && (
+                <p className="text-[11px] text-stone-400 mt-2">
+                    Diet tags are auto-detected from each recipe&apos;s ingredients — a filter aid,
+                    not an allergy check. Open a recipe to correct one.
+                </p>
+            )}
 
             {/* OM9 — Collections filter bar */}
             <CollectionBar

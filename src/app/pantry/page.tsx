@@ -8,6 +8,7 @@ import {
   bulkAddPantryItems,
   getPantryItems,
   removePantryItem,
+  setPantryNeeded,
   type PantryItem,
 } from "@/lib/pantry";
 import { canonicaliseIngredient } from "@/lib/ingredients";
@@ -52,6 +53,15 @@ export default function PantryPage() {
     if (ok) setItems((prev) => prev.filter((i) => i.id !== id));
   };
 
+  // OM40 — flag a staple as low so it lands under Staples on the shopping list.
+  const handleNeeded = async (item: PantryItem) => {
+    const next = !item.needed;
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, needed: next } : i)));
+    await setPantryNeeded(item.id, next);
+  };
+
+  const neededCount = items.filter((i) => i.needed).length;
+
   const previewKey = single.trim() ? canonicaliseIngredient(single) : "";
 
   return (
@@ -61,7 +71,17 @@ export default function PantryPage() {
           <ArrowLeft className="w-6 h-6" />
         </Link>
         <span className="font-serif font-bold text-stone-900">Pantry</span>
-        <span className="text-xs text-stone-500 ml-auto">{items.length} item{items.length === 1 ? "" : "s"}</span>
+        <div className="ml-auto flex items-center gap-3">
+          {neededCount > 0 && (
+            <Link
+              href="/shopping"
+              className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200"
+            >
+              {neededCount} to buy →
+            </Link>
+          )}
+          <span className="text-xs text-stone-500">{items.length} item{items.length === 1 ? "" : "s"}</span>
+        </div>
       </div>
 
       <div className="max-w-2xl mx-auto p-6 space-y-6">
@@ -142,6 +162,19 @@ export default function PantryPage() {
                       <div className="text-[10px] text-stone-400 font-mono truncate">{item.canonical_key}</div>
                     )}
                   </div>
+                  {/* OM40 — "we're low on this". Separate from removing it: being
+                      out of olive oil doesn't mean you've stopped keeping it. */}
+                  <button
+                    onClick={() => handleNeeded(item)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
+                      item.needed
+                        ? "bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200"
+                        : "bg-stone-50 text-stone-500 border-stone-200 hover:bg-stone-100"
+                    }`}
+                    title={item.needed ? "On the shopping list — click to unflag" : "Flag as low, adds it to the shopping list"}
+                  >
+                    {item.needed ? "need to buy" : "running low?"}
+                  </button>
                   <button
                     onClick={() => handleRemove(item.id)}
                     className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-md"
