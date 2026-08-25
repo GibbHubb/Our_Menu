@@ -102,7 +102,7 @@ export default function PantryPage() {
                 <button
                   key={sec.key}
                   onClick={() => setSection(sec.key)}
-                  className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
                     section === sec.key
                       ? "bg-stone-900 text-white border-stone-900"
                       : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"

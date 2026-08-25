@@ -96,20 +96,20 @@ export default function ShoppingPage() {
             subnav={
                 /* OM43 — occupies the row Recipes uses for category chips and
                    Pantry for sections, so all three headers are one height. */
-                <div className="flex items-center gap-2 flex-wrap text-xs">
-                    <span className="px-3 py-1.5 rounded-full bg-white border border-stone-200 text-stone-600">
+                <div className="flex items-center gap-2 flex-wrap text-sm">
+                    <span className="px-4 py-1.5 rounded-full bg-white border border-stone-200 text-stone-600">
                         {basket.length} dish{basket.length === 1 ? "" : "es"}
                     </span>
-                    <span className="px-3 py-1.5 rounded-full bg-white border border-stone-200 text-stone-600">
+                    <span className="px-4 py-1.5 rounded-full bg-white border border-stone-200 text-stone-600">
                         {lines.filter((l) => !ticks.has(lineKey(l))).length} ingredients to get
                     </span>
-                    <span className="px-3 py-1.5 rounded-full bg-white border border-stone-200 text-stone-600">
+                    <span className="px-4 py-1.5 rounded-full bg-white border border-stone-200 text-stone-600">
                         {needed.length + extras.filter((e) => !e.checked).length} staples
                     </span>
                     {ticks.size > 0 && (
                         <button
                             onClick={() => setShowDone((v) => !v)}
-                            className="px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-semibold hover:bg-emerald-100"
+                            className="px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-medium hover:bg-emerald-100"
                         >
                             {ticks.size} in the basket
                         </button>

@@ -108,8 +108,11 @@ export default function AppShell({ toolbar, subnav, children, width = "wide" }: 
                         {toolbar && <div className="flex-1 min-w-[200px]">{toolbar}</div>}
                     </div>
 
-                    {/* Row 3 — whatever this tab needs. The only thing that moves. */}
-                    {subnav}
+                    {/* Row 3 — whatever this tab needs. Fixed height so the
+                        page beneath starts at the same y on every tab: without
+                        it Recipes stood 50px taller than Pantry and the content
+                        jumped under the cursor on every switch. */}
+                    {subnav && <div className="min-h-[34px] flex items-center">{subnav}</div>}
                 </div>
             </header>
 
