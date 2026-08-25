@@ -114,6 +114,55 @@ function tryEmbeddedJson(html: string): JsonLdRecipe | null {
     return null;
 }
 
+/**
+ * Last resort: read the `"recipeIngredient": [ … ]` array on its own.
+ *
+ * inspiredtaste.net carries the whole recipe in a blob that is not itself
+ * valid JSON, so walking out to the enclosing object fails — but the arrays
+ * inside it parse perfectly well. Taking just the arrays needs nothing around
+ * them to be well-formed.
+ */
+function tryLooseArrays(html: string): { ingredients: string[]; instructions: string[]; servings: number | null } {
+    const readArray = (key: string): unknown[] | null => {
+        const at = html.search(new RegExp(`"${key}"\\s*:\\s*\\[`));
+        if (at === -1) return null;
+        const start = html.indexOf("[", at);
+        let depth = 0, inString = false, escaped = false;
+        for (let i = start; i < html.length && i - start < 200_000; i++) {
+            const c = html[i];
+            if (inString) {
+                if (escaped) escaped = false;
+                else if (c === "\\") escaped = true;
+                else if (c === '"') inString = false;
+                continue;
+            }
+            if (c === '"') inString = true;
+            else if (c === "[") depth++;
+            else if (c === "]") {
+                depth--;
+                if (depth === 0) {
+                    try { return JSON.parse(html.slice(start, i + 1)); } catch { return null; }
+                }
+            }
+        }
+        return null;
+    };
+
+    const rawIngredients = readArray("recipeIngredient") ?? [];
+    const ingredients = rawIngredients.map((i) => cleanText(String(i))).filter(Boolean);
+    const rawInstructions = readArray("recipeInstructions");
+    const instructions = rawInstructions
+        ? normaliseInstructions(rawInstructions as JsonLdRecipe["recipeInstructions"])
+        : [];
+    const yieldMatch = html.match(/"recipeYield"\s*:\s*("[^"]*"|\[[^\]]*\]|\d+)/);
+    let servings: number | null = null;
+    if (yieldMatch) {
+        try { servings = parseYield(JSON.parse(yieldMatch[1]) as JsonLdRecipe["recipeYield"]); }
+        catch { servings = parseYield(yieldMatch[1]); }
+    }
+    return { ingredients, instructions, servings };
+}
+
 /** Read a `{...}` starting at `start`, respecting strings and escapes. */
 function readBalancedObject(text: string, start: number): string | null {
     let depth = 0, inString = false, escaped = false;
@@ -424,7 +473,18 @@ export async function extractJsonLdOnly(url: string): Promise<ExtractedRecipe> {
         }
     }
 
-    // Fallback 2 — HTML microdata on the visible markup.
+    // Fallback 2 — the arrays alone, when nothing around them parses.
+    if (!ingredients.length) {
+        const loose = tryLooseArrays(html);
+        if (loose.ingredients.length) {
+            ingredients = loose.ingredients;
+            if (!instructions.length) instructions = loose.instructions;
+            servings = servings ?? loose.servings;
+            warnings.push("Read the recipe arrays out of a page blob that is not valid JSON.");
+        }
+    }
+
+    // Fallback 3 — HTML microdata on the visible markup.
     if (!ingredients.length) {
         const micro = tryMicrodata(html);
         if (micro.ingredients.length) {
