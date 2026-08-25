@@ -39,9 +39,23 @@ export async function POST(
     // may touch. An anonymous caller simply sees no row (404), which is right.
     const supabase = createRequestClient(req);
 
+    // OM40 — `force` replaces existing ingredient/instruction text instead of
+    // only filling blanks. Off by default and never set by the UI: it exists
+    // for the backfill of the 72 recipes whose "ingredients" were a four-line
+    // hand-typed summary ("• Chicken | • Chorizo | • Cream"), which the
+    // fill-blanks-only rule below would skip forever. Max's explicit call,
+    // 2026-08-25, on measured numbers.
+    let force = false;
+    try {
+        const body = await req.json();
+        force = body?.force === true;
+    } catch {
+        /* no body — the UI button sends none */
+    }
+
     const { data: recipe, error: fetchErr } = await supabase
         .from("recipes")
-        .select("id, title, link, ingredients, instructions, shopping_list")
+        .select("id, title, link, ingredients, instructions, shopping_list, servings")
         .eq("id", id)
         .single();
 
@@ -81,21 +95,29 @@ export async function POST(
         );
     }
 
-    // Only fill empty fields — never overwrite existing user content.
-    const updates: Record<string, string> = {};
+    // Only fill empty fields — never overwrite existing user content, unless
+    // the caller explicitly asked for a replacement (see `force` above).
+    const updates: Record<string, string | number> = {};
     const updated: string[] = [];
+    const blank = (v: string | null | undefined) => !v?.trim();
 
-    if (!recipe.ingredients?.trim() && extracted.ingredients.length) {
+    if ((force || blank(recipe.ingredients)) && extracted.ingredients.length) {
         updates.ingredients = extracted.ingredients.join("\n");
         updated.push("ingredients");
     }
-    if (!recipe.instructions?.trim() && extracted.instructions.length) {
+    if ((force || blank(recipe.instructions)) && extracted.instructions.length) {
         updates.instructions = instructionsToText(extracted.instructions);
         updated.push("instructions");
     }
-    if (!recipe.shopping_list?.trim() && extracted.ingredients.length) {
+    if ((force || blank(recipe.shopping_list)) && extracted.ingredients.length) {
         updates.shopping_list = ingredientsToShoppingList(extracted.ingredients);
         updated.push("shopping_list");
+    }
+    // OM40 — the base yield. Never overwritten even under force: if someone
+    // has said "this serves 6 in our house", that beats the source page.
+    if (recipe.servings == null && extracted.servings != null) {
+        updates.servings = extracted.servings;
+        updated.push("servings");
     }
 
     if (!updated.length) {

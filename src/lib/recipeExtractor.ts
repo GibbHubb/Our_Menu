@@ -16,6 +16,12 @@ const LLM_DEFAULT_MODEL =
 export interface ExtractedRecipe {
     ingredients: string[];
     instructions: string[];
+    /**
+     * OM40 — base yield from the page's `recipeYield`, so the shopping list can
+     * answer "how much for 6 people". null when the page doesn't say; the
+     * caller must then scale ×1 rather than guess a base.
+     */
+    servings: number | null;
     /** which path produced the data — useful for logging + UI hints */
     sourcePath: "json-ld" | "llm" | "mixed" | "none";
     /** non-fatal warnings worth surfacing to the caller */
@@ -29,6 +35,7 @@ export interface ExtractedRecipe {
 interface JsonLdRecipe {
     "@type"?: string | string[];
     "@graph"?: unknown[];
+    recipeYield?: string | number | Array<string | number>;
     recipeIngredient?: string | string[];
     recipeInstructions?:
         | string
@@ -113,8 +120,26 @@ function normaliseInstructions(
     return [];
 }
 
-function tryJsonLd(html: string): { ingredients: string[]; instructions: string[] } {
-    const out = { ingredients: [] as string[], instructions: [] as string[] };
+/**
+ * `recipeYield` is one of the messiest fields in the schema: "4", 4, "4
+ * servings", "Serves 4-6", ["4", "4 servings"]. Take the first integer we can
+ * find, and refuse anything absurd — a yield of 0 or 400 is a parsing artefact,
+ * and a wrong base silently mis-scales every quantity on the shopping list.
+ */
+function parseYield(raw: JsonLdRecipe["recipeYield"]): number | null {
+    if (raw === undefined || raw === null) return null;
+    const candidates = Array.isArray(raw) ? raw : [raw];
+    for (const c of candidates) {
+        const m = String(c).match(/\d+/);
+        if (!m) continue;
+        const n = Number(m[0]);
+        if (Number.isInteger(n) && n >= 1 && n <= 50) return n;
+    }
+    return null;
+}
+
+function tryJsonLd(html: string): { ingredients: string[]; instructions: string[]; servings: number | null } {
+    const out = { ingredients: [] as string[], instructions: [] as string[], servings: null as number | null };
     // The attribute is almost never alone on the tag: Yoast ships
     // `class="yoast-schema-graph"`, Cloudflare adds `data-cfasync="false"`,
     // and some themes single-quote the value. Requiring `type="…">` to close
@@ -137,6 +162,7 @@ function tryJsonLd(html: string): { ingredients: string[]; instructions: string[
             if (recipe.recipeInstructions) {
                 out.instructions = normaliseInstructions(recipe.recipeInstructions);
             }
+            out.servings = parseYield(recipe.recipeYield);
             // First Recipe block wins
             if (out.ingredients.length || out.instructions.length) break;
         } catch {
@@ -267,6 +293,7 @@ export async function extractJsonLdOnly(url: string): Promise<ExtractedRecipe> {
             return {
                 ingredients: [],
                 instructions: [],
+                servings: null,
                 sourcePath: "none",
                 warnings: [`Source returned HTTP ${resp.status}`],
             };
@@ -277,16 +304,18 @@ export async function extractJsonLdOnly(url: string): Promise<ExtractedRecipe> {
         return {
             ingredients: [],
             instructions: [],
+            servings: null,
             sourcePath: "none",
             warnings: [`Could not fetch source URL: ${msg}`],
         };
     }
 
-    const { ingredients, instructions } = tryJsonLd(html);
+    const { ingredients, instructions, servings } = tryJsonLd(html);
     if (!ingredients.length && !instructions.length) {
         return {
             ingredients: [],
             instructions: [],
+            servings: null,
             sourcePath: "none",
             warnings: ["No JSON-LD Recipe block found on this page."],
         };
@@ -294,6 +323,7 @@ export async function extractJsonLdOnly(url: string): Promise<ExtractedRecipe> {
     return {
         ingredients,
         instructions,
+        servings,
         sourcePath: "json-ld",
         warnings: [],
     };
@@ -315,6 +345,7 @@ export async function fetchAndParseRecipe(url: string): Promise<ExtractedRecipe>
             return {
                 ingredients: [],
                 instructions: [],
+                servings: null,
                 sourcePath: "none",
                 warnings: [`Source returned HTTP ${resp.status}`],
             };
@@ -325,6 +356,7 @@ export async function fetchAndParseRecipe(url: string): Promise<ExtractedRecipe>
         return {
             ingredients: [],
             instructions: [],
+            servings: null,
             sourcePath: "none",
             warnings: [`Could not fetch source URL: ${msg}`],
         };
@@ -360,7 +392,7 @@ export async function fetchAndParseRecipe(url: string): Promise<ExtractedRecipe>
         }
     }
 
-    return { ingredients, instructions, sourcePath, warnings };
+    return { ingredients, instructions, servings: jsonLd.servings, sourcePath, warnings };
 }
 
 /** Convenience: format an ingredient list as the markdown shopping list shape. */
