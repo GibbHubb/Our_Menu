@@ -19,6 +19,7 @@ import { usePantry } from "@/lib/usePantry";
 import { isCookableNow } from "@/lib/pantry";
 import { currentSeason, isInSeason, SEASON_LABEL, type Season } from "@/lib/seasons";
 import { DIETS, DIET_LABEL, dietMatches, type Diet } from "@/lib/diet";  // OM30
+import { useAiEnabled } from "@/lib/useAiEnabled";  // OM35(c)
 import { useAuth } from "@/lib/AuthContext";
 
 import { CATEGORIES } from "@/lib/constants";
@@ -93,6 +94,9 @@ function MenuContent() {
     const activeSeason = currentSeason() as Season;
     // OM30 — diet filter (single-select; null = no diet constraint)
     const [dietFilter, setDietFilter] = useState<Diet | null>(null);
+
+    // OM35(c) — null until known, so nothing flashes for a key that is fine.
+    const aiEnabled = useAiEnabled();
 
     // OM39 — one way out of a filter combination that matches nothing.
     const clearFilters = () => {
@@ -341,7 +345,11 @@ function MenuContent() {
                 onSearchChange={setSearchTerm}
             />
 
-            {/* Semantic Search Bar (OM1) */}
+            {/* Semantic Search Bar (OM1) — OM35(c): hidden while there is no
+                LLM key, because every query it accepted returned a 503. The
+                plain title/ingredient search in the header still works and is
+                what people were actually using. */}
+            {aiEnabled === true && (
             <div className="max-w-7xl mx-auto px-4 pt-4">
                 <form onSubmit={handleSemanticSearch} className="flex gap-2">
                     <div className="relative flex-1">
@@ -395,6 +403,7 @@ function MenuContent() {
                     </button>
                 )}
             </div>
+            )}
 
             {/* OM12 — Cookable-now chip + Pantry nav (sits between semantic search and collections) */}
             <div className="max-w-7xl mx-auto px-4 pt-3 flex items-center gap-2 flex-wrap">

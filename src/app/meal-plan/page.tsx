@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { apiFetch } from '@/lib/apiFetch';
 import type { Recipe } from '@/lib/types';
+import { useAiEnabled } from '@/lib/useAiEnabled';  // OM35(c)
 
 interface PlanDay {
     day: number;
@@ -17,6 +18,7 @@ interface MealPlan {
 }
 
 export default function MealPlanPage() {
+    const aiEnabled = useAiEnabled();  // OM35(c)
     const [pantry, setPantry] = useState('');
     const [dietary, setDietary] = useState('none');
     const [days, setDays] = useState(7);
@@ -120,7 +122,8 @@ export default function MealPlanPage() {
                 </select>
                 <button
                     onClick={generate}
-                    disabled={loading}
+                    disabled={loading || aiEnabled !== true}
+                    title={aiEnabled === false ? 'Meal-plan generation needs an AI key, which this deployment does not have.' : undefined}
                     style={{
                         padding: '10px 24px',
                         background: '#1a1a2e',
@@ -130,12 +133,20 @@ export default function MealPlanPage() {
                         cursor: loading ? 'not-allowed' : 'pointer',
                         fontSize: '14px',
                         fontWeight: 600,
-                        opacity: loading ? 0.7 : 1,
+                        opacity: loading || aiEnabled !== true ? 0.5 : 1,
                     }}
                 >
                     {loading ? 'Generating...' : 'Generate Meal Plan'}
                 </button>
             </div>
+
+            {/* OM35(c) — say why rather than 503 on click. */}
+            {aiEnabled === false && (
+                <p style={{ fontSize: '13px', color: '#8a8a8a', marginTop: '-8px', marginBottom: '16px' }}>
+                    Meal-plan generation is off: this deployment has no AI key configured. Everything
+                    else — recipes, the shopping list and the pantry — works without one.
+                </p>
+            )}
 
             {error && (
                 <p style={{ color: '#b91c1c', fontSize: '13px', marginBottom: '16px' }}>{error}</p>

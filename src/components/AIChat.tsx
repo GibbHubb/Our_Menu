@@ -4,6 +4,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Bot, User } from "lucide-react";
 import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
+import { useAiEnabled } from "@/lib/useAiEnabled";  // OM35(c)
 
 interface Message {
     role: "user" | "assistant" | "system";
@@ -11,6 +12,11 @@ interface Message {
 }
 
 export default function AIChat() {
+    // OM35(c) — there has never been an LLM key in any environment, so this
+    // button opened a window that could only ever answer "Error connecting to
+    // the chef's brain!". Hide it until a key exists; adding one in Vercel
+    // brings it straight back with no code change.
+    const aiEnabled = useAiEnabled();
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
         { role: "assistant", content: "Hello! I'm your kitchen assistant. How can I help you today?" }
@@ -58,6 +64,8 @@ export default function AIChat() {
             setLoading(false);
         }
     };
+
+    if (aiEnabled !== true) return null;
 
     return (
         <>
