@@ -88,6 +88,41 @@ export default function PantryPage() {
   return (
     <AppShell
       width="narrow"
+      subnav={
+        /* OM43 — the section chips sit where the recipe category chips sit, so
+           the header is the same height on both tabs and nothing jumps. */
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          {/* OM42 — sections. The pantry already held toothpaste and loo roll
+              while the UI called everything an "ingredient". */}
+          <div className="flex gap-2 flex-wrap">
+            {PANTRY_SECTIONS.map((sec) => {
+              const count = items.filter((i) => i.category === sec.key).length;
+              const low = items.filter((i) => i.category === sec.key && i.needed).length;
+              return (
+                <button
+                  key={sec.key}
+                  onClick={() => setSection(sec.key)}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+                    section === sec.key
+                      ? "bg-stone-900 text-white border-stone-900"
+                      : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                  }`}
+                >
+                  {sec.label}
+                  <span className={`ml-2 text-xs ${section === sec.key ? "text-stone-300" : "text-stone-400"}`}>
+                    {count}
+                  </span>
+                  {low > 0 && (
+                    <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500 text-white">
+                      {low}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      }
       toolbar={
         <p className="text-sm text-stone-500">
           <span className="font-serif text-lg text-stone-900 mr-2">Pantry</span>
@@ -102,35 +137,6 @@ export default function PantryPage() {
     >
       <div className="space-y-6">
 
-        {/* OM42 — sections. The pantry already held toothpaste and loo roll
-            while the UI called everything an "ingredient". */}
-        <div className="flex gap-2 flex-wrap">
-          {PANTRY_SECTIONS.map((sec) => {
-            const count = items.filter((i) => i.category === sec.key).length;
-            const low = items.filter((i) => i.category === sec.key && i.needed).length;
-            return (
-              <button
-                key={sec.key}
-                onClick={() => setSection(sec.key)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
-                  section === sec.key
-                    ? "bg-stone-900 text-white border-stone-900"
-                    : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
-                }`}
-              >
-                {sec.label}
-                <span className={`ml-2 text-xs ${section === sec.key ? "text-stone-300" : "text-stone-400"}`}>
-                  {count}
-                </span>
-                {low > 0 && (
-                  <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500 text-white">
-                    {low}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
         <p className="text-xs text-stone-500 -mt-3">
           {PANTRY_SECTIONS.find((x) => x.key === section)?.hint}
         </p>
