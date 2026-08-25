@@ -43,27 +43,126 @@ interface JsonLdRecipe {
         | Array<{ "@type"?: string; text?: string; name?: string }>;
 }
 
-function findRecipeNode(obj: unknown): JsonLdRecipe | null {
-    if (!obj) return null;
+/**
+ * Find the Recipe node anywhere in a JSON-LD document.
+ *
+ * This used to recurse into arrays and `@graph` only, which missed any site
+ * that hangs the Recipe off another key — allrecipes.com and natashaskitchen
+ * both do, and both were reported to the user as "no structured data found"
+ * while serving a complete Recipe node. Walk every value instead; the depth
+ * cap keeps a pathological document from running away.
+ */
+function findRecipeNode(obj: unknown, depth = 0): JsonLdRecipe | null {
+    if (!obj || depth > 12) return null;
     if (Array.isArray(obj)) {
         for (const item of obj) {
-            const found = findRecipeNode(item);
+            const found = findRecipeNode(item, depth + 1);
             if (found) return found;
         }
         return null;
     }
     if (typeof obj === "object") {
-        const o = obj as JsonLdRecipe;
+        const o = obj as JsonLdRecipe & Record<string, unknown>;
         const t = o["@type"];
-        if (
-            t === "Recipe" ||
-            (Array.isArray(t) && t.includes("Recipe"))
-        ) {
-            return o;
+        if (t === "Recipe" || (Array.isArray(t) && t.includes("Recipe"))) return o;
+        for (const value of Object.values(o)) {
+            if (value && typeof value === "object") {
+                const found = findRecipeNode(value, depth + 1);
+                if (found) return found;
+            }
         }
-        if (o["@graph"]) return findRecipeNode(o["@graph"]);
     }
     return null;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Fallbacks for pages with no <script type="application/ld+json"> Recipe
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Strip tags and collapse whitespace — good enough for a list item. */
+function htmlToText(fragment: string): string {
+    return cleanText(fragment);
+}
+
+/**
+ * Some sites ship the very same Recipe JSON inside an ordinary inline script
+ * (a plugin's config blob, a Next.js payload) rather than an ld+json tag.
+ * loveandlemons.com is one. Find `"recipeIngredient"`, then walk backwards to
+ * the `{` that opens a balanced, parseable object around it.
+ */
+function tryEmbeddedJson(html: string): JsonLdRecipe | null {
+    const NEEDLE = /"recipeIngredient"\s*:/g;
+    let m: RegExpExecArray | null;
+    let searches = 0;
+    while ((m = NEEDLE.exec(html)) !== null && searches < 5) {
+        searches++;
+        const idx = m.index;
+        let tried = 0;
+        for (let b = idx; b >= 0 && idx - b < 200_000 && tried < 400; b--) {
+            if (html[b] !== "{") continue;
+            tried++;
+            const blob = readBalancedObject(html, b);
+            if (!blob || b + blob.length < idx) continue;
+            try {
+                const parsed = JSON.parse(blob) as JsonLdRecipe;
+                if (parsed?.recipeIngredient) return parsed;
+            } catch {
+                /* not the object we want — keep walking out */
+            }
+        }
+    }
+    return null;
+}
+
+/** Read a `{...}` starting at `start`, respecting strings and escapes. */
+function readBalancedObject(text: string, start: number): string | null {
+    let depth = 0, inString = false, escaped = false;
+    for (let i = start; i < text.length; i++) {
+        const c = text[i];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (c === "\\") escaped = true;
+            else if (c === '"') inString = false;
+            continue;
+        }
+        if (c === '"') inString = true;
+        else if (c === "{") depth++;
+        else if (c === "}") {
+            depth--;
+            if (depth === 0) return text.slice(start, i + 1);
+        }
+    }
+    return null;
+}
+
+/**
+ * HTML microdata — `itemprop="recipeIngredient"` on the visible markup, which
+ * is what recipearce.com and other non-JSON-LD sites use.
+ */
+function tryMicrodata(html: string): { ingredients: string[]; instructions: string[]; servings: number | null } {
+    const collect = (prop: string): string[] => {
+        const out: string[] = [];
+        const tagged = new RegExp(
+            `<(\\w+)[^>]*itemprop=["']${prop}["'][^>]*>([\\s\\S]*?)</\\1>`, "gi",
+        );
+        let m: RegExpExecArray | null;
+        while ((m = tagged.exec(html)) !== null) {
+            const t = htmlToText(m[2]);
+            if (t) out.push(t);
+        }
+        if (out.length) return out;
+        // Some templates put the value in a content attribute instead.
+        const attr = new RegExp(
+            `<\\w+[^>]*itemprop=["']${prop}["'][^>]*content=["']([^"']+)["']`, "gi",
+        );
+        while ((m = attr.exec(html)) !== null) out.push(m[1].trim());
+        return out;
+    };
+
+    const ingredients = collect("recipeIngredient");
+    const instructions = collect("recipeInstructions");
+    const yieldText = collect("recipeYield")[0];
+    return { ingredients, instructions, servings: parseYield(yieldText) };
 }
 
 /**
@@ -310,23 +409,42 @@ export async function extractJsonLdOnly(url: string): Promise<ExtractedRecipe> {
         };
     }
 
-    const { ingredients, instructions, servings } = tryJsonLd(html);
+    let { ingredients, instructions, servings } = tryJsonLd(html);
+    const warnings: string[] = [];
+
+    // Fallback 1 — the same JSON, just not in an ld+json tag.
+    if (!ingredients.length) {
+        const embedded = tryEmbeddedJson(html);
+        if (embedded?.recipeIngredient) {
+            const raw = embedded.recipeIngredient;
+            ingredients = (Array.isArray(raw) ? raw : [raw]).map((i) => cleanText(String(i))).filter(Boolean);
+            if (!instructions.length) instructions = normaliseInstructions(embedded.recipeInstructions);
+            servings = servings ?? parseYield(embedded.recipeYield);
+            warnings.push("Read from JSON embedded in the page rather than a JSON-LD tag.");
+        }
+    }
+
+    // Fallback 2 — HTML microdata on the visible markup.
+    if (!ingredients.length) {
+        const micro = tryMicrodata(html);
+        if (micro.ingredients.length) {
+            ingredients = micro.ingredients;
+            if (!instructions.length) instructions = micro.instructions;
+            servings = servings ?? micro.servings;
+            warnings.push("Read from HTML microdata rather than JSON-LD.");
+        }
+    }
+
     if (!ingredients.length && !instructions.length) {
         return {
             ingredients: [],
             instructions: [],
             servings: null,
             sourcePath: "none",
-            warnings: ["No JSON-LD Recipe block found on this page."],
+            warnings: ["No recipe data found on this page — not as JSON-LD, embedded JSON, or microdata."],
         };
     }
-    return {
-        ingredients,
-        instructions,
-        servings,
-        sourcePath: "json-ld",
-        warnings: [],
-    };
+    return { ingredients, instructions, servings, sourcePath: "json-ld", warnings };
 }
 
 export async function fetchAndParseRecipe(url: string): Promise<ExtractedRecipe> {
