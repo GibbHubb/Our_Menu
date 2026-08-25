@@ -32,9 +32,15 @@ interface MembershipRow {
  * never accepted an invite). Does not create — use ensureHousehold() for that.
  */
 export async function getMyHousehold(): Promise<Household | null> {
+  // OM39(d) — this used to take the EARLIEST membership while the DB's
+  // get_active_household() takes the most recently activated one. For anyone in
+  // two households the /households screen therefore managed a different kitchen
+  // than the one new recipes land in, and its Leave button was not the
+  // household the user thought they were leaving. Same ordering as 019 now.
   const { data, error } = await supabase
     .from('household_members')
-    .select('household_id, households(id, name, created_by, created_at)')
+    .select('household_id, activated_at, joined_at, households(id, name, created_by, created_at)')
+    .order('activated_at', { ascending: false, nullsFirst: false })
     .order('joined_at', { ascending: true })
     .limit(1)
     .maybeSingle();

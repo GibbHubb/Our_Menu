@@ -32,7 +32,15 @@ function LoginInner() {
       if (error) throw error;
       setSent(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      // OM39(c) — Supabase's built-in mailer allows 2 sign-in emails per hour
+      // for the whole project. The raw error says "email rate limit exceeded",
+      // which reads like a fault rather than "wait, and don't keep clicking".
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(
+        /rate limit/i.test(msg)
+          ? "We can only send two sign-in emails an hour. Check your inbox (and spam) for one already sent — otherwise try again a little later."
+          : msg,
+      );
     } finally {
       setSending(false);
     }
