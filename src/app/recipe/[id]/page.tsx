@@ -276,7 +276,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                     {/* OM42 — cooking history is a footnote, not a headline. It
                         had a full-width card on every recipe; Max: "we don't
                         need the made today on all of them". */}
-                    <div className="flex items-center gap-3 text-xs text-stone-400 -mb-4">
+                    <div className="flex items-center gap-3 text-xs text-stone-400">
                         <ChefHat className="w-3.5 h-3.5" />
                         <span>{formatLastCooked(lastCookedAt ?? undefined) ?? 'Never cooked'}</span>
                         <button

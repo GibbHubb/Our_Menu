@@ -146,7 +146,12 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
     const isSelected = useCallback((item: ParsedItem) => {
         const key = canonicaliseIngredient(item.name) || checkedKey(item.name);
         if (excluded.has(key)) return false;
-        return !isInPantry(item);
+        if (isInPantry(item)) return false;
+        // `isStandard` is the "PANTRY" badge — salt, oil, the cup of pasta
+        // cooking water. Nobody buys those for a specific recipe, so they start
+        // off too; tick one if you actually are out of it.
+        if (item.isStandard) return false;
+        return true;
     }, [excluded, isInPantry]);
 
     const toggleSelected = useCallback((item: ParsedItem) => {
