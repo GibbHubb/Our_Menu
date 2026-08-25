@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Plus, Trash2, Loader2, Sparkles } from "lucide-react";
-import PrimaryNav from "@/components/PrimaryNav";  // OM42
+import AppShell from "@/components/AppShell";  // OM43
 import {
   addPantryItem,
   importCommonStaples,
@@ -86,30 +86,21 @@ export default function PantryPage() {
   const previewKey = single.trim() ? canonicaliseIngredient(single) : "";
 
   return (
-    <div className="min-h-screen bg-stone-50 font-sans pb-20">
-      <div className="bg-white sticky top-0 z-40 border-b border-stone-100 px-4 py-3 flex items-center gap-3 shadow-sm">
-        <Link href="/" className="p-2 -ml-2 text-stone-600 hover:bg-stone-100 rounded-full">
-          <ArrowLeft className="w-6 h-6" />
-        </Link>
-        <span className="font-serif font-bold text-stone-900">Pantry</span>
-        <div className="ml-auto flex items-center gap-3">
+    <AppShell
+      width="narrow"
+      toolbar={
+        <p className="text-sm text-stone-500">
+          <span className="font-serif text-lg text-stone-900 mr-2">Pantry</span>
+          {items.length} item{items.length === 1 ? "" : "s"}
           {neededCount > 0 && (
-            <Link
-              href="/shopping"
-              className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200"
-            >
+            <Link href="/shopping" className="ml-2 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200">
               {neededCount} to buy →
             </Link>
           )}
-          <span className="text-xs text-stone-500">{items.length} item{items.length === 1 ? "" : "s"}</span>
-        </div>
-      </div>
-
-      <div className="max-w-2xl mx-auto px-6 pt-4">
-        <PrimaryNav />
-      </div>
-
-      <div className="max-w-2xl mx-auto p-6 space-y-6">
+        </p>
+      }
+    >
+      <div className="space-y-6">
 
         {/* OM42 — sections. The pantry already held toothpaste and loo roll
             while the UI called everything an "ingredient". */}
@@ -288,6 +279,6 @@ export default function PantryPage() {
           )}
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

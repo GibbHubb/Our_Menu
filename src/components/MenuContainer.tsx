@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState, Suspense } from "react";
 import { Category, Recipe } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
 import { apiFetch } from "@/lib/apiFetch";
-import Header from "./Header";
+import AppShell from "./AppShell";  // OM43
+import { Search } from "lucide-react";
 import MasonryGrid from "./MasonryGrid";
 import AddRecipeModal from "./AddRecipeModal";
 import EditRecipeModal from "./EditRecipeModal";
@@ -336,14 +337,45 @@ function MenuContent() {
     };
 
     return (
-        <div className="min-h-screen bg-stone-50 text-stone-900 font-sans pb-20">
-            <Header
-                categories={CATEGORIES}
-                selectedCategory={selectedCategory}
-                onSelectCategory={setSelectedCategory}
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-            />
+        <AppShell
+            toolbar={
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                    <input
+                        type="text"
+                        placeholder="What are we craving?"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-white border border-stone-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-stone-400 transition-shadow shadow-sm"
+                    />
+                </div>
+            }
+            subnav={
+                /* OM43 — category chips belong to Recipes, so they live in the
+                   shell's one changeable row rather than in a header of their own. */
+                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar mask-gradient">
+                    <button
+                        onClick={() => setSelectedCategory("All")}
+                        className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${selectedCategory === "All"
+                            ? "bg-stone-900 text-stone-50"
+                            : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-100"}`}
+                    >
+                        All Dishes
+                    </button>
+                    {CATEGORIES.map((cat) => (
+                        <button
+                            key={cat}
+                            onClick={() => setSelectedCategory(cat)}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${selectedCategory === cat
+                                ? "bg-stone-900 text-stone-50"
+                                : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-100"}`}
+                        >
+                            {cat}
+                        </button>
+                    ))}
+                </div>
+            }
+        >
 
             {/* Semantic Search Bar (OM1) — OM35(c): hidden while there is no
                 LLM key, because every query it accepted returned a 503. The
@@ -494,7 +526,7 @@ function MenuContent() {
                 }}
             />
 
-            <main className="max-w-7xl mx-auto pt-4">
+            <div className="pt-1">
                 {loading ? (
                     <div className="flex justify-center pt-20">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-stone-900"></div>
@@ -513,7 +545,7 @@ function MenuContent() {
                         onClearFilters={clearFilters}
                     />
                 )}
-            </main>
+            </div>
 
             {/* Floating Action Buttons */}
             <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-40">
@@ -556,7 +588,7 @@ function MenuContent() {
             />
 
             <ChatAgent />
-        </div>
+        </AppShell>
     );
 }
 

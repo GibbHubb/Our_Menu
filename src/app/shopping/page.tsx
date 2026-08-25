@@ -22,7 +22,7 @@ import {
     type BasketRow, type ExtraRow,
 } from "@/lib/shopping";
 import { getPantryItems, setPantryNeeded, type PantryItem } from "@/lib/pantry";
-import PrimaryNav from "@/components/PrimaryNav";  // OM42
+import AppShell from "@/components/AppShell";  // OM43
 
 export default function ShoppingPage() {
     const router = useRouter();
@@ -91,25 +91,16 @@ export default function ShoppingPage() {
     }
 
     return (
-        <div className="min-h-screen bg-stone-50">
-            <header className="sticky top-0 z-40 bg-stone-50/95 backdrop-blur-md border-b border-stone-200">
-                <div className="max-w-3xl mx-auto px-4 py-3 space-y-3">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-stone-900 rounded-full">
-                            <ShoppingCart className="w-5 h-5 text-stone-50" />
-                        </div>
-                        <div className="flex-1">
-                            <h1 className="font-serif text-2xl text-stone-900 leading-tight">Shopping List</h1>
-                            <p className="text-xs text-stone-500">
-                                {outstanding === 0 ? "Nothing left to buy" : `${outstanding} still to get`}
-                            </p>
-                        </div>
-                    </div>
-                    <PrimaryNav />
-                </div>
-            </header>
-
-            <main className="max-w-3xl mx-auto px-4 py-6 space-y-8">
+        <AppShell
+            width="narrow"
+            toolbar={
+                <p className="text-sm text-stone-500">
+                    <span className="font-serif text-lg text-stone-900 mr-2">Shopping list</span>
+                    {outstanding === 0 ? "nothing left to buy" : `${outstanding} still to get`}
+                </p>
+            }
+        >
+            <div className="space-y-8">
                 {/* ── Dishes ─────────────────────────────────────────────── */}
                 <section>
                     <h2 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">
@@ -311,7 +302,7 @@ export default function ShoppingPage() {
                         </form>
                     </div>
                 </section>
-            </main>
-        </div>
+            </div>
+        </AppShell>
     );
 }
