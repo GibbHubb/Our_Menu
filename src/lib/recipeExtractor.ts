@@ -59,6 +59,25 @@ function findRecipeNode(obj: unknown): JsonLdRecipe | null {
     return null;
 }
 
+/**
+ * JSON-LD text fields are allowed to contain markup — plenty of sites put
+ * `<br>`, links and entities inside `text`. Flatten to something a person can
+ * read in a plain <p>, and collapse the runs of whitespace that come from
+ * pretty-printed source.
+ */
+function cleanText(s: string): string {
+    return s
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;|&apos;/gi, "'")
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
 function normaliseInstructions(
     raw: JsonLdRecipe["recipeInstructions"],
 ): string[] {
@@ -67,26 +86,43 @@ function normaliseInstructions(
         // Some sites cram all steps into one string with newlines / numbers.
         return raw
             .split(/\n|(?<=[.!?])\s{2,}|^\s*\d+\.\s+/m)
-            .map((s) => s.trim())
+            .map(cleanText)
             .filter(Boolean);
     }
     if (Array.isArray(raw)) {
-        return raw
-            .map((item) => {
-                if (typeof item === "string") return item.trim();
-                if (item && typeof item === "object") {
-                    return (item.text || item.name || "").toString().trim();
+        return raw.flatMap((item) => {
+            if (typeof item === "string") return [cleanText(item)];
+            if (item && typeof item === "object") {
+                // A HowToSection ("For the marinade", "To serve") holds its
+                // steps in itemListElement. Taking `name` here would keep the
+                // heading and throw away every step under it.
+                const section = item as {
+                    "@type"?: string;
+                    itemListElement?: JsonLdRecipe["recipeInstructions"];
+                    text?: string;
+                    name?: string;
+                };
+                if (section.itemListElement) {
+                    return normaliseInstructions(section.itemListElement);
                 }
-                return "";
-            })
-            .filter(Boolean);
+                return [cleanText((section.text || section.name || "").toString())];
+            }
+            return [];
+        }).filter(Boolean);
     }
     return [];
 }
 
 function tryJsonLd(html: string): { ingredients: string[]; instructions: string[] } {
     const out = { ingredients: [] as string[], instructions: [] as string[] };
-    const re = /<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/gi;
+    // The attribute is almost never alone on the tag: Yoast ships
+    // `class="yoast-schema-graph"`, Cloudflare adds `data-cfasync="false"`,
+    // and some themes single-quote the value. Requiring `type="…">` to close
+    // the tag matched ZERO blocks on every WordPress food blog we link to —
+    // the extractor then reported "no structured data" for pages that carry a
+    // complete Recipe node. Match the attribute wherever it sits.
+    const re =
+        /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
     let match: RegExpExecArray | null;
     while ((match = re.exec(html)) !== null) {
         try {
@@ -96,7 +132,7 @@ function tryJsonLd(html: string): { ingredients: string[]; instructions: string[
             if (recipe.recipeIngredient) {
                 const raw = recipe.recipeIngredient;
                 const list = Array.isArray(raw) ? raw : [raw];
-                out.ingredients = list.map((i) => String(i).trim()).filter(Boolean);
+                out.ingredients = list.map((i) => cleanText(String(i))).filter(Boolean);
             }
             if (recipe.recipeInstructions) {
                 out.instructions = normaliseInstructions(recipe.recipeInstructions);
