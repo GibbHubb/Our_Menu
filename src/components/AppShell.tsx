@@ -112,7 +112,7 @@ export default function AppShell({ toolbar, subnav, children, width = "wide" }: 
                         page beneath starts at the same y on every tab: without
                         it Recipes stood 50px taller than Pantry and the content
                         jumped under the cursor on every switch. */}
-                    {subnav && <div className="min-h-[34px] flex items-center">{subnav}</div>}
+                    {subnav && <div className="h-[34px] flex items-center overflow-x-auto no-scrollbar">{subnav}</div>}
                 </div>
             </header>
 
