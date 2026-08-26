@@ -20,6 +20,7 @@ import { ChefHat, LogIn, LogOut, User as UserIcon, Users } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useUnitSystem } from "@/lib/useUnitSystem";
 import PrimaryNav, { BottomNav } from "./PrimaryNav";
+import InstallHint from "./InstallHint";  // OM45
 
 interface AppShellProps {
     /** Sits to the right of the tabs — the search box on Recipes, a count elsewhere. */
@@ -127,6 +128,7 @@ export default function AppShell({ toolbar, subnav, children, width = "wide" }: 
             <main className={`${inner} mx-auto px-4 py-5 sm:py-6`}>{children}</main>
 
             <BottomNav />
+            <InstallHint />
         </div>
     );
 }
