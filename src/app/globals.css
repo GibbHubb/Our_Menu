@@ -21,3 +21,37 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-playfair), serif;
 }
+
+/* ── OM44 — phone behaviour ────────────────────────────────────────────────
+   Bron and Max use this in a supermarket, on iPhones, added to the home
+   screen. Three things that make a web page feel like a website there. */
+
+/* 1. Safari ZOOMS THE WHOLE PAGE when you focus an input under 16px, and
+   never zooms back out. Every text input in this app was 14px (text-sm). */
+@media (max-width: 640px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="search"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* 2. Rubber-band scrolling makes a standalone PWA feel like a page in a
+   browser rather than an app; and a tap should not flash a grey box. */
+html {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* 3. Don't let a long ingredient line ("spaghetti or other pasta, long or
+   short") push the layout sideways on a narrow screen. */
+body {
+  overflow-wrap: break-word;
+}
+
+/* Hide the scrollbar on the chip rows without losing the scrolling. */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

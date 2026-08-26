@@ -18,10 +18,15 @@ const inter = Inter({
 });
 
 export const viewport: Viewport = {
-  themeColor: "#F5F5F4", // stone-100
+  // OM44 — matches the app's own ground so the iPhone status bar and the
+  // page are the same colour in standalone mode, instead of a white band.
+  themeColor: "#fafaf9", // stone-50
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  // Draw under the notch and the home indicator; the shell pads for both
+  // with env(safe-area-inset-*).
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
@@ -31,7 +36,18 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Max & Bron Menu",
+    title: "Max & Bron",
+  },
+  // OM44 — the manifest pointed at /icon-192x192.png and /icon-512x512.png and
+  // NEITHER EXISTED (404 on the live site), so "Add to Home Screen" gave a
+  // blurry screenshot instead of an icon. They exist now, and iOS reads
+  // apple-touch-icon ahead of the manifest.
+  icons: {
+    icon: [
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   formatDetection: {
     telephone: false,

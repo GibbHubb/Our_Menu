@@ -19,7 +19,7 @@ import Link from "next/link";
 import { ChefHat, LogIn, LogOut, User as UserIcon, Users } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useUnitSystem } from "@/lib/useUnitSystem";
-import PrimaryNav from "./PrimaryNav";
+import PrimaryNav, { BottomNav } from "./PrimaryNav";
 
 interface AppShellProps {
     /** Sits to the right of the tabs — the search box on Recipes, a count elsewhere. */
@@ -37,9 +37,12 @@ export default function AppShell({ toolbar, subnav, children, width = "wide" }: 
     const inner = width === "narrow" ? "max-w-3xl" : "max-w-6xl";
 
     return (
-        <div className="min-h-screen bg-stone-50 font-sans pb-20">
-            <header className="sticky top-0 z-50 bg-stone-50/95 backdrop-blur-md border-b border-stone-200 shadow-sm">
-                <div className="max-w-6xl mx-auto px-4 py-3 space-y-3">
+        <div className="min-h-screen bg-stone-50 font-sans pb-24 sm:pb-20">
+            <header
+                className="sticky top-0 z-40 bg-stone-50/95 backdrop-blur-md border-b border-stone-200 shadow-sm"
+                style={{ paddingTop: "env(safe-area-inset-top)" }}
+            >
+                <div className="max-w-6xl mx-auto px-4 py-2.5 sm:py-3 space-y-2.5 sm:space-y-3">
 
                     {/* Row 1 — who we are, who you are. Identical on every tab. */}
                     <div className="flex items-center gap-3">
@@ -102,10 +105,11 @@ export default function AppShell({ toolbar, subnav, children, width = "wide" }: 
                         )}
                     </div>
 
-                    {/* Row 2 — the three tabs, always in the same place. */}
-                    <div className="flex items-center gap-3 flex-wrap">
-                        <PrimaryNav />
-                        {toolbar && <div className="flex-1 min-w-[200px]">{toolbar}</div>}
+                    {/* Row 2 — tabs on a laptop; on a phone they are the bottom
+                        bar instead (thumb reach), so the toolbar takes the row. */}
+                    <div className="flex items-center gap-3">
+                        <div className="hidden sm:block"><PrimaryNav /></div>
+                        {toolbar && <div className="flex-1 min-w-0">{toolbar}</div>}
                     </div>
 
                     {/* Row 3 — whatever this tab needs. Fixed height so the
@@ -116,7 +120,9 @@ export default function AppShell({ toolbar, subnav, children, width = "wide" }: 
                 </div>
             </header>
 
-            <main className={`${inner} mx-auto px-4 py-6`}>{children}</main>
+            <main className={`${inner} mx-auto px-4 py-5 sm:py-6`}>{children}</main>
+
+            <BottomNav />
         </div>
     );
 }
