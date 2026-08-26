@@ -23,6 +23,7 @@ import {
 } from "@/lib/shopping";
 import { getPantryItems, setPantryNeeded, type PantryItem } from "@/lib/pantry";
 import AppShell from "@/components/AppShell";  // OM43
+import { aisleFor, AISLE_ORDER, AISLE_LABEL, AISLE_EMOJI, type Aisle } from "@/lib/aisles";  // OM45
 
 export default function ShoppingPage() {
     const router = useRouter();
@@ -63,6 +64,21 @@ export default function ShoppingPage() {
     }, [authLoading, user, router, load]);
 
     const { lines, unscalable } = useMemo(() => buildList(basket), [basket]);
+
+    // OM45 — one lap of the shop instead of an alphabetical zig-zag between
+    // the fruit and the freezer.
+    const grouped = useMemo(() => {
+        const byAisle = new Map<Aisle, typeof lines>();
+        for (const line of lines) {
+            const a = aisleFor(line.item);
+            const list = byAisle.get(a) ?? [];
+            list.push(line);
+            byAisle.set(a, list);
+        }
+        return AISLE_ORDER
+            .map((a) => ({ aisle: a, items: byAisle.get(a) ?? [] }))
+            .filter((g) => g.items.length > 0);
+    }, [lines]);
 
     const outstanding = lines.filter((l) => !ticks.has(lineKey(l))).length
         + extras.filter((e) => !e.checked).length
@@ -214,9 +230,17 @@ export default function ShoppingPage() {
                             </div>
                         )}
 
+                        {grouped.map(({ aisle, items }) => {
+                            const visible = items.filter((line) => showDone || !ticks.has(lineKey(line)));
+                            if (!visible.length) return null;
+                            return (
+                              <div key={aisle} className="mb-4">
+                                <h3 className="text-[11px] font-bold uppercase tracking-wider text-stone-400 mb-1.5 px-1">
+                                    <span className="mr-1.5">{AISLE_EMOJI[aisle]}</span>{AISLE_LABEL[aisle]}
+                                    <span className="ml-1.5 font-medium normal-case tracking-normal text-stone-300">{visible.length}</span>
+                                </h3>
                         <ul className="bg-white border border-stone-100 rounded-2xl divide-y divide-stone-100 overflow-hidden">
-                            {lines
-                                .filter((line) => showDone || !ticks.has(lineKey(line)))
+                            {visible
                                 .map((line) => {
                                 const key = lineKey(line);
                                 const done = ticks.has(key);
@@ -250,6 +274,9 @@ export default function ShoppingPage() {
                                 );
                             })}
                         </ul>
+                              </div>
+                            );
+                        })}
                     </section>
                 )}
 
