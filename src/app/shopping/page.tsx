@@ -96,7 +96,7 @@ export default function ShoppingPage() {
             subnav={
                 /* OM43 — occupies the row Recipes uses for category chips and
                    Pantry for sections, so all three headers are one height. */
-                <div className="flex items-center gap-2 flex-wrap text-sm">
+                <div className="flex items-center gap-2 flex-nowrap text-sm whitespace-nowrap">
                     <span className="px-4 py-1.5 rounded-full bg-white border border-stone-200 text-stone-600">
                         {basket.length} dish{basket.length === 1 ? "" : "es"}
                     </span>

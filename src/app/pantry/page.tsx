@@ -91,7 +91,7 @@ export default function PantryPage() {
       subnav={
         /* OM43 — the section chips sit where the recipe category chips sit, so
            the header is the same height on both tabs and nothing jumps. */
-        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <div className="flex gap-2 flex-nowrap whitespace-nowrap">
           {/* OM42 — sections. The pantry already held toothpaste and loo roll
               while the UI called everything an "ingredient". */}
           <div className="flex gap-2 flex-wrap">
