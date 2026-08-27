@@ -10,9 +10,11 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Check, Copy, Home, Loader2, LogOut, Pencil, UserPlus, Users, AlertCircle,
+  ArrowLeft, Check, Copy, Home, KeyRound, Loader2, LogOut, Pencil, UserPlus, Users, AlertCircle,
 } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
+import { PASSWORD_MIN, markPasswordSet } from "@/lib/password";
 import {
   createInvite, ensureHousehold, getMyHousehold, inviteUrl, leaveHousehold,
   listMembers, renameHousehold, type Household, type HouseholdMember,
@@ -33,6 +35,16 @@ export default function HouseholdsPage() {
 
   const [renaming, setRenaming] = useState(false);
   const [draftName, setDraftName] = useState("");
+
+  // OM48 — your own sign-in, not the household's.
+  const [pw1, setPw1] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwDone, setPwDone] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  // Where to send them once they are done — set when the magic-link offer
+  // routed them here mid-journey (an invite is the case that matters).
+  const [continueTo, setContinueTo] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,6 +73,27 @@ export default function HouseholdsPage() {
     void load();
   }, [authLoading, user, router, load]);
 
+  // OM48 — arriving at /households?next=…#password from the sign-in offer.
+  //
+  // Read off `window` rather than useSearchParams: this is a client-only
+  // page and useSearchParams would drag a Suspense boundary in with it.
+  //
+  // The hash cannot do its own scrolling here — this page renders a spinner
+  // while it loads, so `id="password"` does not exist when the browser
+  // applies the hash, and it never retries. Scroll it ourselves once the
+  // element is really on the page.
+  useEffect(() => {
+    if (loading || authLoading || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("next");
+    if (raw && /^\/(?!\/)/.test(raw)) setContinueTo(raw);
+    if (window.location.hash !== "#password") return;
+    const el = document.getElementById("password");
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById("pw-new")?.focus({ preventScroll: true });
+  }, [loading, authLoading]);
+
   const handleInvite = async () => {
     setMinting(true);
     setError(null);
@@ -71,6 +104,32 @@ export default function HouseholdsPage() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setMinting(false);
+    }
+  };
+
+  const handleSetPassword = async () => {
+    if (pwSaving) return; // Enter can fire this faster than the button disables
+    setPwError(null);
+    if (pw1.length < PASSWORD_MIN) {
+      setPwError(`Use at least ${PASSWORD_MIN} characters.`);
+      return;
+    }
+    if (pw1 !== pw2) {
+      setPwError("Those two don't match.");
+      return;
+    }
+    setPwSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pw1 });
+      if (error) throw error;
+      markPasswordSet(user?.id);
+      setPwDone(true);
+      setPw1("");
+      setPw2("");
+    } catch (e) {
+      setPwError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPwSaving(false);
     }
   };
 
@@ -261,6 +320,99 @@ export default function HouseholdsPage() {
               {minting && <Loader2 className="w-4 h-4 animate-spin" />}
               Create invite link
             </button>
+          )}
+        </section>
+
+        {/* ── Your password ────────────────────────────────────────────
+            OM48. This is the only place in the app a password can be set.
+            Before it existed, the two that worked had been set by an admin
+            script and a new member had a login form they could never
+            satisfy. Note this is your sign-in, not the household's — it is
+            on this page because this is where "you" already lives. */}
+        <section id="password" className="bg-white rounded-2xl shadow-sm border border-stone-100 p-6 space-y-4">
+          <div className="flex items-center gap-2 text-stone-400">
+            <KeyRound className="w-4 h-4" />
+            <span className="text-xs font-bold uppercase tracking-wider">Your password</span>
+          </div>
+
+          {pwDone ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
+                <Check className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>
+                  Saved. You can sign in with <span className="font-medium">{user?.email}</span> and
+                  that password from now on — no email needed.
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                {continueTo && (
+                  <button
+                    onClick={() => router.replace(continueTo)}
+                    className="px-5 py-2.5 bg-stone-900 text-white rounded-lg text-sm font-semibold hover:bg-stone-800"
+                  >
+                    Continue
+                  </button>
+                )}
+                <button
+                  onClick={() => { setPwDone(false); setPwError(null); }}
+                  className="text-xs text-stone-500 hover:text-stone-900 underline underline-offset-2"
+                >
+                  Change it again
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-stone-600 text-sm leading-relaxed">
+                Set one and you can sign in without waiting for an email. Changing it here
+                replaces the old one everywhere.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="pw-new" className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1">
+                    New password
+                  </label>
+                  <input
+                    id="pw-new"
+                    type="password"
+                    autoComplete="new-password"
+                    value={pw1}
+                    onChange={(e) => setPw1(e.target.value)}
+                    placeholder={`At least ${PASSWORD_MIN} characters`}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="pw-confirm" className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1">
+                    Again
+                  </label>
+                  <input
+                    id="pw-confirm"
+                    type="password"
+                    autoComplete="new-password"
+                    value={pw2}
+                    onChange={(e) => setPw2(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") void handleSetPassword(); }}
+                    placeholder="Type it once more"
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                </div>
+              </div>
+              {pwError && (
+                <div className="flex items-start gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{pwError}</span>
+                </div>
+              )}
+              <button
+                onClick={() => void handleSetPassword()}
+                disabled={pwSaving || !pw1 || !pw2}
+                className="px-5 py-2.5 bg-stone-900 text-white rounded-lg text-sm font-semibold hover:bg-stone-800 disabled:opacity-60 flex items-center gap-2"
+              >
+                {pwSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Save password
+              </button>
+            </>
           )}
         </section>
 

@@ -67,7 +67,11 @@ function LoginInner() {
       const msg = err instanceof Error ? err.message : String(err);
       setError(
         /invalid login credentials/i.test(msg)
-          ? "That email and password don't match. Try again, or email yourself a sign-in link instead."
+          // OM48 — this fires for two different people: someone who mistyped,
+          // and someone who has never had a password at all (every account
+          // before OM47 was created by a magic link, which sets none). Say
+          // both, or the second one reads it as "you are not allowed in".
+          ? "That email and password don't match. If you have never set one, use the sign-in link below — you can set a password straight after."
           : msg,
       );
     } finally {
@@ -209,7 +213,7 @@ function LoginInner() {
               onClick={() => switchTo("link")}
               className="w-full text-xs text-stone-500 hover:text-stone-900 underline underline-offset-2"
             >
-              Forgotten it? Email me a sign-in link instead
+              New here, or forgotten it? Email me a sign-in link instead
             </button>
           </form>
         ) : sent ? (
