@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Recipe } from "@/lib/types";
-import { Link2, Pencil, ChefHat } from "lucide-react";
+import { Link2, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { isSeasonHighlight, currentSeason, SEASON_LABEL, type Season } from "@/lib/seasons";
@@ -11,10 +11,9 @@ interface RecipeCardProps {
     onEdit?: (recipe: Recipe) => void;
     onClick?: (recipe: Recipe) => void; // Kept for type compatibility but unused if we use Link
     /** OM12 — true when every ingredient on this recipe is in the pantry. */
-    cookableNow?: boolean;
 }
 
-export default function RecipeCard({ recipe, onEdit, cookableNow }: RecipeCardProps) {
+export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
     // Simple deterministic color seed based on category for placeholder
     const getCategoryColor = (cat: string) => {
         switch (cat) {
@@ -90,13 +89,8 @@ export default function RecipeCard({ recipe, onEdit, cookableNow }: RecipeCardPr
                         <AddToListButton recipeId={recipe.id} baseServings={recipe.servings} variant="icon" />
                     </div>
 
-                    {/* OM12 — cookable-now badge (top-right, distinct from edit/link affordances) */}
-                    {cookableNow && (
-                        <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-emerald-500/95 text-white text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full shadow-sm backdrop-blur-sm">
-                            <ChefHat className="w-3 h-3" />
-                            Cookable now
-                        </div>
-                    )}
+                    {/* OM49 — the cookable-now badge was here. The pantry no
+                        longer records what you have, so nothing can answer it. */}
 
                     {/* OM13 — in-season pill (only when in-season AND not year-round) */}
                     {seasonHighlight && (

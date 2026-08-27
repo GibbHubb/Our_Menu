@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Plus, ShoppingCart, Sparkles, Trash2 } from "lucide-react";
 import AppShell from "@/components/AppShell";  // OM43
 import {
   addPantryItem,
@@ -13,10 +13,10 @@ import {
   bulkAddPantryItems,
   getPantryItems,
   removePantryItem,
-  setPantryNeeded,
   type PantryItem,
 } from "@/lib/pantry";
 import { canonicaliseIngredient } from "@/lib/ingredients";
+import { addExtra } from "@/lib/shopping";  // OM49
 
 export default function PantryPage() {
   const [items, setItems] = useState<PantryItem[]>([]);
@@ -28,6 +28,15 @@ export default function PantryPage() {
   // OM42 — which section new items land in, and which one is on screen.
   const [section, setSection] = useState<PantryCategory>("kitchen");
   const [importing, setImporting] = useState(false);
+  // OM49 — the pantry stopped being a record of what is in the cupboard and
+  // became the "then the house" half of a shop: you walk it, tick what you
+  // need, and it goes on the list. The selection is deliberately LOCAL — it is
+  // not the old `needed` flag, which persisted, so the screen always opened
+  // wearing last week's decisions. It spans the section chips so one walk down
+  // Kitchen, Bathroom and Household is a single decision.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
+  const [addedCount, setAddedCount] = useState<number | null>(null);
 
   const refresh = async () => {
     setLoading(true);
@@ -74,14 +83,30 @@ export default function PantryPage() {
     setImporting(false);
   };
 
-  // OM40 — flag a staple as low so it lands under Staples on the shopping list.
-  const handleNeeded = async (item: PantryItem) => {
-    const next = !item.needed;
-    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, needed: next } : i)));
-    await setPantryNeeded(item.id, next);
+  const toggleSelected = (id: string) => {
+    setAddedCount(null);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
 
-  const neededCount = items.filter((i) => i.needed).length;
+  // OM49 — copy the ticked items onto the shopping list, then forget them.
+  // Nothing is written back to the pantry row: next time you open this screen
+  // it is blank again, which is the whole point.
+  const handleAddSelected = async () => {
+    if (!selected.size) return;
+    setAdding(true);
+    const chosen = items.filter((i) => selected.has(i.id));
+    const results = await Promise.all(chosen.map((i) => addExtra(i.display_name)));
+    setAdding(false);
+    // Count what actually landed, not what was asked for.
+    setAddedCount(results.filter(Boolean).length);
+    setSelected(new Set());
+  };
+
+  const selectedCount = selected.size;
 
   const previewKey = single.trim() ? canonicaliseIngredient(single) : "";
 
@@ -97,7 +122,7 @@ export default function PantryPage() {
           <div className="flex gap-2 flex-wrap">
             {PANTRY_SECTIONS.map((sec) => {
               const count = items.filter((i) => i.category === sec.key).length;
-              const low = items.filter((i) => i.category === sec.key && i.needed).length;
+              const low = items.filter((i) => i.category === sec.key && selected.has(i.id)).length;
               return (
                 <button
                   key={sec.key}
@@ -127,10 +152,10 @@ export default function PantryPage() {
         <p className="text-sm text-stone-500">
           <span className="font-serif text-lg text-stone-900 mr-2">Pantry</span>
           {items.length} item{items.length === 1 ? "" : "s"}
-          {neededCount > 0 && (
-            <Link href="/shopping" className="ml-2 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200">
-              {neededCount} to buy →
-            </Link>
+          {selectedCount > 0 && (
+            <span className="ml-2 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+              {selectedCount} ticked
+            </span>
           )}
         </p>
       }
@@ -140,6 +165,35 @@ export default function PantryPage() {
         <p className="text-xs text-stone-500 -mt-3">
           {PANTRY_SECTIONS.find((x) => x.key === section)?.hint}
         </p>
+
+        {/* OM49 — the one way off this screen and onto the list. It sits at the
+            top because the sections are chips: walk Kitchen, walk Bathroom,
+            walk Household, and the count keeps rising across all three, so
+            burying the button under one section's list would hide it from a
+            walk that ended in another. It reads 0 and is disabled until
+            something is ticked. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => void handleAddSelected()}
+            disabled={adding || selectedCount === 0}
+            className={`flex-1 min-w-[220px] py-2.5 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${
+              addedCount !== null ? "bg-emerald-600 text-white" : "bg-stone-900 text-white hover:bg-stone-800"
+            }`}
+          >
+            {adding ? <Loader2 className="w-4 h-4 animate-spin" />
+              : addedCount !== null ? <Check className="w-4 h-4" />
+              : <ShoppingCart className="w-4 h-4" />}
+            {addedCount !== null
+              ? `Added ${addedCount} item${addedCount === 1 ? "" : "s"} to the shopping list`
+              : `Add ${selectedCount} item${selectedCount === 1 ? "" : "s"} to shopping list`}
+          </button>
+          <Link
+            href="/shopping"
+            className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-stone-100 text-stone-700 hover:bg-stone-200"
+          >
+            Shopping list →
+          </Link>
+        </div>
 
         {/* OM42 — Max: "there should be a standard pantry with shit that
             everyone has / wants". Offered while the pantry is still thin, and
@@ -242,24 +296,29 @@ export default function PantryPage() {
             <ul className="divide-y divide-stone-100">
               {items.filter((i) => i.category === section).map((item) => (
                 <li key={item.id} className="flex items-center justify-between gap-3 py-2.5">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-stone-900 truncate">{item.display_name}</div>
-                    {item.canonical_key !== item.display_name.toLowerCase().trim() && (
-                      <div className="text-[10px] text-stone-400 font-mono truncate">{item.canonical_key}</div>
-                    )}
-                  </div>
-                  {/* OM40 — "we're low on this". Separate from removing it: being
-                      out of olive oil doesn't mean you've stopped keeping it. */}
+                  {/* OM49 — tick what you need on this shop. Tapping the row
+                      toggles it, so the target is the whole line rather than a
+                      20px box on a phone. */}
                   <button
-                    onClick={() => handleNeeded(item)}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
-                      item.needed
-                        ? "bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200"
-                        : "bg-stone-50 text-stone-500 border-stone-200 hover:bg-stone-100"
-                    }`}
-                    title={item.needed ? "On the shopping list — click to unflag" : "Flag as low, adds it to the shopping list"}
+                    onClick={() => toggleSelected(item.id)}
+                    className="flex-1 min-w-0 flex items-center gap-3 text-left"
+                    aria-pressed={selected.has(item.id)}
                   >
-                    {item.needed ? "need to buy" : "running low?"}
+                    <span className={`flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                      selected.has(item.id)
+                        ? "bg-emerald-600 border-emerald-600 text-white"
+                        : "bg-white border-stone-300"
+                    }`}>
+                      {selected.has(item.id) && <Check className="w-3.5 h-3.5" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block text-sm truncate ${selected.has(item.id) ? "font-semibold text-stone-900" : "font-medium text-stone-900"}`}>
+                        {item.display_name}
+                      </span>
+                      {item.canonical_key !== item.display_name.toLowerCase().trim() && (
+                        <span className="block text-[10px] text-stone-400 font-mono truncate">{item.canonical_key}</span>
+                      )}
+                    </span>
                   </button>
                   <button
                     onClick={() => handleRemove(item.id)}
