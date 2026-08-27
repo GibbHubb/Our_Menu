@@ -86,8 +86,18 @@ export default function AppShell({ toolbar, subnav, children, width = "wide" }: 
                                     <UserIcon className="w-3.5 h-3.5" />
                                     <span className="max-w-[140px] truncate">{user.email?.split("@")[0]}</span>
                                 </span>
+                                {/* OM47 — ask first. This is a 32px target in the
+                                    top-right corner of a phone, which is where a
+                                    thumb lands when you scroll one-handed, and a
+                                    stray tap used to end the session silently.
+                                    Staying signed in is the feature; the button
+                                    is the main thing that broke it. */}
                                 <button
-                                    onClick={() => { void signOut(); }}
+                                    onClick={() => {
+                                        if (window.confirm("Sign out of Max & Bron? You'll need your password to get back in.")) {
+                                            void signOut();
+                                        }
+                                    }}
                                     className="p-2 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-full"
                                     title="Sign out"
                                     aria-label="Sign out"
