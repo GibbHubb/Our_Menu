@@ -18,7 +18,10 @@ import { usePathname } from "next/navigation";
 import { BookOpen, Refrigerator, ShoppingCart } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
-import { buildList, getBasket, getExtras, getTicks, lineKey } from "@/lib/shopping";
+import {
+    buildList, extraTickKey, getBasket, getExtras, getTicks, lineKey,
+    pantryTickKey, LIST_CHANGED_EVENT,
+} from "@/lib/shopping";
 import { getPantryItems } from "@/lib/pantry";
 
 const TABS = [
@@ -70,6 +73,17 @@ export function BottomNav() {
 /** Shared so the header tabs and the bottom bar can never show different counts. */
 function useToBuyCount(user: ReturnType<typeof useAuth>["user"], pathname: string) {
     const [toBuy, setToBuy] = useState<number | null>(null);
+    // OM46 — bumped by the list-changed event below. Route changes were the only
+    // trigger, so while you stood on /shopping ticking things off the badge kept
+    // showing the count you started with.
+    const [nonce, setNonce] = useState(0);
+
+    useEffect(() => {
+        const bump = () => setNonce((n) => n + 1);
+        window.addEventListener(LIST_CHANGED_EVENT, bump);
+        return () => window.removeEventListener(LIST_CHANGED_EVENT, bump);
+    }, []);
+
     useEffect(() => {
         let alive = true;
         void (async () => {
@@ -79,41 +93,27 @@ function useToBuyCount(user: ReturnType<typeof useAuth>["user"], pathname: strin
             ]);
             if (!alive) return;
             const { lines } = buildList(basket);
+            // OM46 — a staple or an extra you have already ticked is in the
+            // basket, so it is not "still to buy". The badge counted them until
+            // the trip was finished, which meant the number on the tab
+            // disagreed with the "N still to get" on the page itself.
             setToBuy(
-                lines.filter((l) => !ticks.has(lineKey(l))).length
-                + extras.filter((e) => !e.checked).length
-                + pantry.filter((p) => p.needed).length,
+                lines.filter((l) => !ticks.keys.has(lineKey(l))).length
+                + extras.filter((e) => !ticks.keys.has(extraTickKey(e.id))).length
+                + pantry.filter((p) => p.needed && !ticks.keys.has(pantryTickKey(p.id))).length,
             );
         })();
         return () => { alive = false; };
-    }, [user, pathname]);
+    }, [user, pathname, nonce]);
     return toBuy;
 }
 
 export default function PrimaryNav() {
     const pathname = usePathname();
     const { user } = useAuth();
-    const [toBuy, setToBuy] = useState<number | null>(null);
-
-    useEffect(() => {
-        let alive = true;
-        void (async () => {
-            // Every setState lives inside the async body: touching state
-            // synchronously here trips react-hooks/set-state-in-effect.
-            if (!user) { if (alive) setToBuy(null); return; }
-            const [basket, extras, ticks, pantry] = await Promise.all([
-                getBasket(), getExtras(), getTicks(), getPantryItems(),
-            ]);
-            if (!alive) return;
-            const { lines } = buildList(basket);
-            setToBuy(
-                lines.filter((l) => !ticks.has(lineKey(l))).length
-                + extras.filter((e) => !e.checked).length
-                + pantry.filter((p) => p.needed).length,
-            );
-        })();
-        return () => { alive = false; };
-    }, [user, pathname]);
+    // Uses the same hook the bottom bar does — this component carried its own
+    // copy of the count, which is the drift the hook's comment warns about.
+    const toBuy = useToBuyCount(user, pathname);
 
     const isActive = (href: string) =>
         href === "/" ? pathname === "/" : pathname.startsWith(href);

@@ -53,9 +53,12 @@ export const COMMON_STAPLES: Record<PantryCategory, string[]> = {
  * oil doesn't mean olive oil stops being something you keep in the house, and
  * deleting it would drop it out of the "Cookable now" calculation too.
  */
-export async function setPantryNeeded(id: string, needed: boolean): Promise<void> {
+export async function setPantryNeeded(id: string, needed: boolean): Promise<boolean> {
   const { error } = await supabase.from('pantry_items').update({ needed }).eq('id', id);
-  if (error) console.error('setPantryNeeded:', error);
+  // OM46 — reports failure, because finishing a shop must not clear a tick it
+  // did not manage to record.
+  if (error) { console.error('setPantryNeeded:', error); return false; }
+  return true;
 }
 
 export async function getPantryItems(): Promise<PantryItem[]> {
