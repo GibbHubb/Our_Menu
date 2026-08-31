@@ -16,7 +16,7 @@ import {
   type PantryItem,
 } from "@/lib/pantry";
 import { canonicaliseIngredient } from "@/lib/ingredients";
-import { addExtra } from "@/lib/shopping";  // OM49
+import { announceListChanged, copyLinesToList, shoppingKey } from "@/lib/shopping";  // OM49
 
 export default function PantryPage() {
   const [items, setItems] = useState<PantryItem[]>([]);
@@ -37,6 +37,7 @@ export default function PantryPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
   const [addedCount, setAddedCount] = useState<number | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const refresh = async () => {
     setLoading(true);
@@ -67,7 +68,16 @@ export default function PantryPage() {
 
   const handleRemove = async (id: string) => {
     const ok = await removePantryItem(id);
-    if (ok) setItems((prev) => prev.filter((i) => i.id !== id));
+    if (!ok) return;
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    // OM49 review finding 5 — the deleted row kept its tick, so the Add button
+    // went on counting a thing that was no longer on screen.
+    setSelected((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   };
 
   // OM42 — one click for the things you buy again and again. Idempotent:
@@ -85,6 +95,7 @@ export default function PantryPage() {
 
   const toggleSelected = (id: string) => {
     setAddedCount(null);
+    setAddError(null);
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -99,11 +110,29 @@ export default function PantryPage() {
     if (!selected.size) return;
     setAdding(true);
     const chosen = items.filter((i) => selected.has(i.id));
-    const results = await Promise.all(chosen.map((i) => addExtra(i.display_name)));
+    // One call, so two rows that canonicalise to the same thing arrive as one
+    // line rather than racing each other (OM49 review finding 2).
+    const { added, merged, failed } = await copyLinesToList(
+      chosen.map((i) => ({
+        item: i.display_name,
+        key: i.canonical_key || shoppingKey(i.display_name),
+        qty_base: null,
+        family: null,
+        unit_hint: null,
+      })),
+    );
     setAdding(false);
     // Count what actually landed, not what was asked for.
-    setAddedCount(results.filter(Boolean).length);
-    setSelected(new Set());
+    setAddedCount(added + merged);
+    // OM49 review finding 3 — the whole selection used to be cleared even when
+    // writes failed, so a failed item silently lost its tick with nothing on
+    // screen to say so. Keep the ticks if anything failed; the button is safe
+    // to press again, because the copy merges rather than duplicates.
+    if (failed === 0) setSelected(new Set());
+    else setAddError(`${failed} item${failed === 1 ? "" : "s"} didn't make it onto the list — try again.`);
+    // OM49 review finding 4 — the nav badge counts the list, and nothing told
+    // it the list had just grown.
+    announceListChanged();
   };
 
   const selectedCount = selected.size;
@@ -194,6 +223,12 @@ export default function PantryPage() {
             Shopping list →
           </Link>
         </div>
+
+        {addError && (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            {addError}
+          </p>
+        )}
 
         {/* OM42 — Max: "there should be a standard pantry with shit that
             everyone has / wants". Offered while the pantry is still thin, and

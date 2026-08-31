@@ -7,8 +7,7 @@ import Link from "next/link";
 import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
 import { supabase } from "@/lib/supabaseClient";
 import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
-import { canonicaliseIngredient } from "@/lib/ingredients";
-import { addToBasket } from "@/lib/shopping";  // OM42
+import { copyLinesToList, toCopyLine } from "@/lib/shopping";  // OM49
 
 interface Substitution { name: string; note: string; }
 
@@ -42,6 +41,7 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
     const [included, setIncluded] = useState<Set<string>>(new Set());
     const [adding, setAdding] = useState(false);
     const [added, setAdded] = useState(false);
+    const [addError, setAddError] = useState<string | null>(null);
 
     const fetchSubstitutions = async (item: ParsedItem) => {
         if (subsLoading) return;
@@ -136,16 +136,17 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
     // OM49 — "selected" means "put this on the shopping list", and nothing is
     // selected until you say so. Every ingredient is offered on equal terms:
     // no pantry subtraction, no staple gets a head start.
-    const isSelected = useCallback((item: ParsedItem) => {
-        const key = canonicaliseIngredient(item.name) || checkedKey(item.name);
-        return included.has(key);
-    }, [included]);
+    //
+    // Keyed by the LINE, not by the canonical ingredient (OM49 review finding
+    // 7): "1 red onion" and "1 onion" canonicalise to the same thing, so a
+    // shared key made two rows move one checkbox. That was latent while ticking
+    // was a side note; it is the primary action now.
+    const isSelected = useCallback((item: ParsedItem) => included.has(item.id), [included]);
 
     const toggleSelected = useCallback((item: ParsedItem) => {
-        const key = canonicaliseIngredient(item.name) || checkedKey(item.name);
         setIncluded((prev) => {
             const next = new Set(prev);
-            if (next.has(key)) next.delete(key); else next.add(key);
+            if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
             return next;
         });
     }, []);
@@ -157,24 +158,54 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
 
     const selectedItems = items.filter(isSelected);
 
+    /**
+     * OM49 — copy the ticked lines onto the shopping list, at the servings on
+     * screen.
+     *
+     * This replaces `addToBasket(recipeId, servings, excluded)`. That call sent
+     * every UNticked line as the dish's `excluded` array, which the shopping
+     * page then subtracted from a live projection — and since `included` starts
+     * empty on every page load, a second Add for the same recipe sent the first
+     * Add's ingredients as excluded and wiped it (it also clobbered the bought
+     * keys `finishTrip` wrote into that same column). An exclusion wire format
+     * cannot express an inclusion UI; the ticket's own plan said this "works
+     * as-is" and it did not.
+     *
+     * The line is re-parsed from its ORIGINAL text rather than from the display
+     * name, so the amount and its unit survive the trip and can be merged
+     * against on the other side: 2 cans here plus 1 can from another recipe is
+     * one line reading 3 cans.
+     */
     const handleAddToList = async () => {
-        if (!recipeId) return;
         setAdding(true);
-        const keys = items
-            .filter((i) => !isSelected(i))
-            .map((i) => canonicaliseIngredient(i.name) || checkedKey(i.name))
-            .filter(Boolean);
-        const ok = await addToBasket(recipeId, scaledServings ?? Math.max(1, Math.round(4 * scale)), keys);
+        const lines = items
+            .filter(isSelected)
+            .map((i) => toCopyLine(i.original, scale, i.name));
+        const { added: newRows, merged, failed } = await copyLinesToList(lines);
         setAdding(false);
-        if (ok) { setAdded(true); setTimeout(() => setAdded(false), 3000); }
+        // Only clear the ticks that actually landed somewhere — a silent
+        // failure that also empties the screen leaves nothing to retry from.
+        if (failed === 0 && newRows + merged > 0) {
+            setIncluded(new Set());
+            setAdded(true);
+            setTimeout(() => setAdded(false), 3000);
+        } else if (failed > 0) {
+            setAddError(`${failed} item${failed === 1 ? "" : "s"} didn't make it onto the list — try again.`);
+            setTimeout(() => setAddError(null), 5000);
+        }
     };
 
+    // OM49 review finding 6 — this copied only the ticked lines, which in the
+    // new "everything starts blank" default is nothing at all: it put an empty
+    // string on the clipboard and still flashed "Copied!". Tick something and
+    // it copies your selection; tick nothing and it copies the recipe, which is
+    // what a button called "Copy List" on a recipe page means.
     const handleCopy = () => {
         const textLines: string[] = [];
         const htmlLines: string[] = [];
+        const chosen = selectedItems.length ? selectedItems : items;
 
-        items
-            .filter(isSelected)
+        chosen
             .forEach(item => {
             let text = item.name;
             if (item.quantity !== null) {
@@ -282,6 +313,12 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                 </div>
             )}
 
+            {addError && (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    {addError}
+                </p>
+            )}
+
             {/* List */}
             <div className="space-y-2">
                 {items.map((item) => {
@@ -320,7 +357,10 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                                     starts off, that styling would strike out the
                                     whole recipe. Ticking adds emphasis instead. */}
                                 <div className="flex-1 text-sm leading-snug text-stone-900">
-                                    {displayQty && <span className="font-bold mr-1.5">{displayQty}</span>}
+                                    {/* The space is a real character, not just `mr-1.5` —
+                                        a margin is invisible to copy/paste and to a
+                                        screen reader, which both read "2cans tomatoes". */}
+                                    {displayQty && <><span className="font-bold">{displayQty}</span>{" "}</>}
                                     <span className={selected ? 'font-medium' : ''}>
                                         {item.name}
                                     </span>

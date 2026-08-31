@@ -1,40 +1,60 @@
 /**
- * OM40 — the shopping list: what to buy for the dishes you picked.
+ * OM49 — the shopping list: the things you decided to buy.
  *
- * Three inputs, one list:
- *   meal_basket      dishes + how many you're feeding  -> scaled ingredients
- *   pantry_items     rows flagged `needed`             -> Staples
- *   shopping_extras  hand-typed                        -> Staples
+ * One table, `shopping_extras`, holding plain rows. A row gets there one of
+ * three ways — ticked on a recipe, ticked in the pantry, or typed in — and once
+ * it is there it no longer remembers which. That is the whole change from OM40:
  *
- * Tick state lives in `shopping_ticks`, keyed by the ingredient's canonical
- * name rather than by row id, so ticking "500 g beef" off and then changing
- * the servings doesn't silently untick it — you'd be standing in the shop
- * wondering whether you already grabbed it.
+ *   before   list = buildList(meal_basket) minus `excluded` minus the pantry
+ *   now      list = the rows you put on it
+ *
+ * The old shape was a live projection, so nothing on screen was a thing you
+ * could point at. Removing one ingredient meant either removing the whole dish
+ * or storing a per-dish exclusion, and "Checked out" would have had to unwind a
+ * basket rather than empty a list. Max + Bron, 2026-08-27: "we are no longer
+ * treating this like a pantry tracker... we decide what we need for the meal,
+ * then the house, then make sure we bought it at the shops, then reset."
+ *
+ * Merging is the one piece of real logic and it lives at copy time: 2 cans +
+ * 1 can = 3 cans, while 200 g + 1 can stays two lines, because a made-up
+ * g<->can conversion in front of someone in a shop is worse than two lines.
+ *
+ * Tick state stays in `shopping_ticks` (OM46), keyed by row id, so the page,
+ * the nav badge and the auto-finish all read one definition of "in the basket".
  */
 
 import { supabase } from './supabaseClient';
 import { canonicaliseIngredient } from './ingredients';
-import { setPantryNeeded } from './pantry';
+import {
+    parseIngredient, scale, toBaseAmount, formatAmount,
+    type ParsedIngredient, type UnitFamily,
+} from './quantity';
 
 /**
- * OM46 — one tick store for all three kinds of thing on the list.
+ * OM46 — one tick store for everything on the list.
  *
- * `shopping_ticks` was built for the computed ingredient lines, which have no
- * row id of their own. Staples and hand-typed extras DO have ids, but routing
- * them through the same table buys two things: a single definition of "ticked"
- * for the whole page, and a single clock — `updated_at` — for the hour of
- * inactivity that ends a trip. A staples-only shop has to be able to finish
- * itself too.
+ * `shopping_ticks` was built for the computed ingredient lines, which had no
+ * row id of their own. Every line has one now, but the table stays: it is also
+ * the single clock — `updated_at` — that the inactivity timeout runs off.
  */
-export const pantryTickKey = (id: string) => `pantry:${id}`;
-export const extraTickKey  = (id: string) => `extra:${id}`;
+// (`pantryTickKey` lived here too, for the Staples section that OM49 removed —
+// the pantry's ticks are local to one walk down it now and never reach the DB.)
+export const extraTickKey = (id: string) => `extra:${id}`;
 
-/** OM46 — leave the list alone for this long and the trip closes itself. */
-export const AUTO_FINISH_MS = 60 * 60 * 1000;
+/**
+ * Leave the list alone for this long and the trip closes itself.
+ *
+ * OM46 set an hour; Max cut it to 15 minutes for OM49, on the reasoning that
+ * the walk home from the shop is the moment nobody remembers to press the
+ * button. It can only ever remove things you have TICKED — what you did not
+ * tick is untouched — so the worst case is a list that closed while you were
+ * standing in a queue, and the summary that appears says so and names the count.
+ */
+export const AUTO_FINISH_MS = 15 * 60 * 1000;
 
 /**
  * OM46 — "the list changed". The nav badge lives in a different component tree
- * from the list, and only refetched on a route change, so ticking something off
+ * from the list and only refetched on a route change, so ticking something off
  * left the tab still claiming you had 17 things to buy. Same pattern the unit
  * toggle already uses (`om27-unit-system-changed`).
  */
@@ -49,30 +69,44 @@ export function announceListChanged(): void {
  *
  * The auto-finish compares "when was this list last touched" against "now", and
  * both used to come from the device. Two phones share this list, so a handset
- * whose clock is an hour fast would finish a trip the moment the other one
- * ticked something. Supabase stamps every HTTP response with a `Date` header,
- * so one HEAD gives us the offset and every comparison afterwards is in server
- * time. Falls back to the local clock if the probe fails — an unreachable
- * network is not a reason to break ticking.
+ * whose clock is 20 minutes fast would end a trip the other one is still
+ * shopping. One `server_now()` call gives us the offset and every comparison
+ * afterwards is in server time.
+ *
+ * Falls back to the local clock if the probe fails — an unreachable network is
+ * not a reason to break ticking — but it does NOT remember the failure, so the
+ * next page load tries again. The other half of the pair is in migration 024:
+ * `shopping_ticks.updated_at` is now stamped by Postgres, so the value being
+ * compared against is not a phone's opinion either.
  */
 let clockSkewMs: number | null = null;
 
 export async function syncServerClock(): Promise<void> {
     if (clockSkewMs !== null) return;
     try {
-        const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        if (!base) { clockSkewMs = 0; return; }
         const before = Date.now();
-        const res = await fetch(`${base.replace(/\/$/, '')}/rest/v1/`, { method: 'HEAD' });
-        const header = res.headers.get('date');
-        if (!header) { clockSkewMs = 0; return; }
-        const server = new Date(header).getTime();
-        if (Number.isNaN(server)) { clockSkewMs = 0; return; }
+        // OM49 — was `res.headers.get('date')` on a HEAD of the REST root. A
+        // browser cannot read that header: `Date` is not CORS-safelisted, so it
+        // came back null on every call and the code quietly took its "network
+        // failed" branch — skew 0, the device's own clock, which is exactly the
+        // thing this function exists to stop trusting. It looked like it worked
+        // because the fallback IS the old behaviour. `server_now()` (migration
+        // 024) is an RPC, so the value comes back in the body where we can see it.
+        const { data, error } = await supabase.rpc('server_now');
+        if (error || !data) return;                    // leave null: try again next load
+        const server = new Date(data as string).getTime();
+        if (Number.isNaN(server)) return;
         // Charge half the round trip to the response leg.
         clockSkewMs = server - (before + (Date.now() - before) / 2);
     } catch {
-        clockSkewMs = 0;
+        // Deliberately does NOT cache 0. One blip used to disable the skew
+        // correction for the life of the tab.
     }
+}
+
+/** Did we ever manage to read the server's clock? Reported, not assumed. */
+export function serverClockKnown(): boolean {
+    return clockSkewMs !== null;
 }
 
 /** Now, in server time where we know it. */
@@ -96,119 +130,244 @@ export function shoppingKey(name: string): string {
         .split(',')[0];
     return canonicaliseIngredient(head) || canonicaliseIngredient(name) || name.trim().toLowerCase();
 }
-import { parseIngredient, scale, aggregate, type ShoppingLine } from './quantity';
 
-export interface BasketRow {
-    id: string;
-    recipe_id: string;
-    servings: number;
-    /** OM42 — canonical keys the user unticked when adding the dish. */
-    excluded?: string[] | null;
-    recipes: {
-        id: string;
-        title: string;
-        image_url: string | null;
-        ingredients: string | null;
-        servings: number | null;
-    } | null;
-}
+// ── the list ────────────────────────────────────────────────────────────────
 
-export interface ExtraRow {
+/**
+ * One thing to buy.
+ *
+ * `label` is the bare name — the amount is rendered from `qty_base`, never
+ * baked into the string, because a merge has to be able to change the number
+ * without re-parsing text it already understood once.
+ */
+export interface ListRow {
     id: string;
     label: string;
-    checked: boolean;
+    item_key: string;
+    qty_base: number | null;
+    family: UnitFamily | null;
+    unit_hint: string | null;
 }
 
-// ── basket ──────────────────────────────────────────────────────────────────
+const LIST_COLUMNS = 'id, label, item_key, qty_base, family, unit_hint';
 
-export async function getBasket(): Promise<BasketRow[]> {
+/** "3 cans", "1.5 kg", "2 tbsp" — or null when the line carried no number. */
+export function listAmount(row: ListRow): string | null {
+    if (row.qty_base === null || !row.family) return null;
+    return formatAmount(row.qty_base, row.family, row.unit_hint);
+}
+
+/** The whole line as one string, for the clipboard. */
+export function listLineText(row: ListRow): string {
+    const amount = listAmount(row);
+    return amount ? `${amount} ${row.label}` : row.label;
+}
+
+function toListRow(r: Record<string, unknown>): ListRow {
+    return {
+        id: r.id as string,
+        label: r.label as string,
+        item_key: (r.item_key as string) ?? '',
+        // PostgREST can hand `numeric` back as a string depending on the
+        // driver; a string here would make the next merge concatenate.
+        qty_base: r.qty_base === null || r.qty_base === undefined ? null : Number(r.qty_base),
+        family: (r.family as UnitFamily | null) ?? null,
+        unit_hint: (r.unit_hint as string | null) ?? null,
+    };
+}
+
+export async function getList(): Promise<ListRow[]> {
     const { data, error } = await supabase
-        .from('meal_basket')
-        .select('id, recipe_id, servings, excluded, recipes(id, title, image_url, ingredients, servings)')
+        .from('shopping_extras')
+        .select(LIST_COLUMNS)
         .order('created_at');
-    if (error) { console.error('getBasket:', error); return []; }
-    // PostgREST widens a to-one embed to an array in the generated types.
-    return (data ?? []).map((r) => {
-        const rec = (r as unknown as { recipes: BasketRow['recipes'] | BasketRow['recipes'][] }).recipes;
-        return { ...(r as unknown as BasketRow), recipes: Array.isArray(rec) ? rec[0] ?? null : rec };
-    });
+    if (error) { console.error('getList:', error); return []; }
+    return (data ?? []).map((r) => toListRow(r as Record<string, unknown>));
+}
+
+/** A line on its way to the list, already scaled to the servings you chose. */
+export interface CopyLine {
+    /** Display name — "tinned tomatoes". */
+    item: string;
+    /** Canonical merge key. */
+    key: string;
+    qty_base: number | null;
+    family: UnitFamily | null;
+    unit_hint: string | null;
 }
 
 /**
- * Add a dish. Adding one that's already there adjusts its servings instead of
- * creating a second row — the unique index in 020 enforces the same thing at
- * the DB, so a double-click can't produce two entries to reconcile.
- */
-export async function addToBasket(
-    recipeId: string,
-    servings: number,
-    excluded: string[] = [],
-): Promise<boolean> {
-    const { error } = await supabase
-        .from('meal_basket')
-        .upsert({ recipe_id: recipeId, servings, excluded }, { onConflict: 'household_id,recipe_id' });
-    if (error) { console.error('addToBasket:', error); return false; }
-    return true;
-}
-
-export async function setBasketServings(id: string, servings: number): Promise<boolean> {
-    const { error } = await supabase.from('meal_basket').update({ servings }).eq('id', id);
-    if (error) { console.error('setBasketServings:', error); return false; }
-    return true;
-}
-
-export async function removeFromBasket(id: string): Promise<boolean> {
-    const { error } = await supabase.from('meal_basket').delete().eq('id', id);
-    if (error) { console.error('removeFromBasket:', error); return false; }
-    return true;
-}
-
-/**
- * OM46 — replace a dish's excluded keys.
+ * Turn a recipe line into something copyable, at the servings on screen.
  *
- * `excluded` started life (OM42) as "ingredients I unticked when adding this
- * dish". Finishing a shop writes into the same column, because a thing you
- * have already bought and a thing you never wanted are the same instruction to
- * the list: keep it off. Recording it on the basket row rather than globally is
- * what stops the dish you add next week arriving pre-ticked.
+ * `fallback` is the name the UI is showing. A line the parser cannot make sense
+ * of still goes on the list — verbatim, with no number — because a missing
+ * ingredient is worse than an unscaled one.
  */
-export async function setBasketExcluded(id: string, excluded: string[]): Promise<boolean> {
-    const { error } = await supabase.from('meal_basket').update({ excluded }).eq('id', id);
-    if (error) { console.error('setBasketExcluded:', error); return false; }
+export function toCopyLine(raw: string, factor = 1, fallback = ''): CopyLine {
+    const parsed: ParsedIngredient = scale(parseIngredient(raw), factor);
+    const name = (parsed.item || fallback || raw).trim();
+    // The same head-cut `shoppingKey` makes, so the NAME on the list matches the
+    // key it merged under: "1 onion, chopped" is a line about onions, and
+    // "onion, chopped" is a prep note you cannot buy.
+    const item = name.split(/\bor\b/i)[0].split('/')[0].split(',')[0].trim() || name;
+    const qtyBase = toBaseAmount(parsed);
+    return {
+        item,
+        key: shoppingKey(item || raw),
+        qty_base: qtyBase,
+        // No number means no family and no unit: "salt and pepper" is not 0 g
+        // of salt, and it must not merge with "20 g salt" either.
+        family: qtyBase === null ? null : (parsed.family ?? 'count'),
+        unit_hint: qtyBase === null ? null : parsed.unit,
+    };
+}
+
+export interface CopyResult {
+    /** New rows on the list. */
+    added: number;
+    /** Rows whose amount grew because the thing was already on it. */
+    merged: number;
+    /** Lines that did not make it — the caller must not report those as added. */
+    failed: number;
+}
+
+/**
+ * The bucket two lines must share to become one line.
+ *
+ * Family alone is not enough: `can`, `clove`, `bunch` and `packet` are all
+ * family `count` with base 1, so keying on the family would add "2 cans tinned
+ * tomatoes" to "3 tinned tomatoes" and show **5 cans** — the same
+ * wrong-number-in-a-shop the cross-family rule exists to prevent, one level
+ * down. Counted things merge only when the counted noun matches.
+ *
+ * Mass and volume are deliberately exempt: their conversion is exact, so
+ * 500 g + 1 kg really is 1500 g and merging them is right.
+ *
+ * ⚠️ The unique index in migration 023 is keyed the same way. Change one and
+ * you must change the other, or an insert starts failing at the database.
+ */
+const mergeKey = (key: string, family: UnitFamily | null, unitHint: string | null) =>
+    `${key}|${family ?? ''}|${family === 'count' ? (unitHint ?? '') : ''}`;
+
+/**
+ * Copy ticked lines onto the list, merging by ingredient AND unit family.
+ *
+ * Max, 2026-08-27: "merge units and always try to include amounts — so 2 × cans
+ * tinned tomatoes + 1 can from another recipe would be 3 × cans of tinned
+ * tomatoes." Adding across families is deliberately NOT attempted: 200 g of
+ * tomatoes and a tin of tomatoes are two different things to pick up, and a
+ * single invented number would send you home without one of them.
+ */
+export async function copyLinesToList(lines: CopyLine[]): Promise<CopyResult> {
+    // Fold the incoming batch together first, so one recipe listing an
+    // ingredient twice arrives as one line rather than racing itself.
+    const wanted = new Map<string, CopyLine>();
+    for (const line of lines) {
+        const item = line.item.trim();
+        const key = line.key.trim();
+        if (!item || !key) continue;
+        const k = mergeKey(key, line.family, line.unit_hint);
+        const prev = wanted.get(k);
+        if (!prev) { wanted.set(k, { ...line, item, key }); continue; }
+        prev.qty_base = prev.qty_base === null && line.qty_base === null
+            ? null
+            : (prev.qty_base ?? 0) + (line.qty_base ?? 0);
+        prev.unit_hint = prev.unit_hint ?? line.unit_hint;
+    }
+    if (!wanted.size) return { added: 0, merged: 0, failed: 0 };
+
+    const current = await getList();
+    const index = new Map(current.map((r) => [mergeKey(r.item_key, r.family, r.unit_hint), r]));
+
+    let added = 0, merged = 0, failed = 0;
+
+    for (const [k, want] of wanted) {
+        const existing = index.get(k);
+        if (existing) {
+            if (await mergeInto(existing, want)) merged++; else failed++;
+            continue;
+        }
+
+        const { data, error } = await supabase
+            .from('shopping_extras')
+            .insert([{
+                label: want.item,
+                item_key: want.key,
+                qty_base: want.qty_base,
+                family: want.family,
+                unit_hint: want.unit_hint,
+            }])
+            .select(LIST_COLUMNS)
+            .single();
+
+        if (error) {
+            // 23505 — the other phone put the same thing on the list between
+            // our read and our write. Merge into theirs rather than failing in
+            // someone's face while they are standing in the shop.
+            if (error.code === '23505') {
+                const row = await findListRow(want.key, want.family, want.unit_hint);
+                if (row && await mergeInto(row, want)) { merged++; continue; }
+            }
+            console.error('copyLinesToList:', error);
+            failed++;
+            continue;
+        }
+        added++;
+        index.set(k, toListRow(data as Record<string, unknown>));
+    }
+
+    if (added || merged) announceListChanged();
+    return { added, merged, failed };
+}
+
+/** Add `want`'s amount to a row already on the list. */
+async function mergeInto(row: ListRow, want: CopyLine): Promise<boolean> {
+    // A line with no number adds nothing but is not a failure: "salt and
+    // pepper" is already on the list, and there is no amount to grow.
+    const qty = want.qty_base === null
+        ? row.qty_base
+        : (row.qty_base ?? 0) + want.qty_base;
+    const { error } = await supabase
+        .from('shopping_extras')
+        .update({ qty_base: qty, unit_hint: row.unit_hint ?? want.unit_hint })
+        .eq('id', row.id);
+    if (error) { console.error('copyLinesToList/merge:', error); return false; }
     return true;
 }
 
-// ── extras ──────────────────────────────────────────────────────────────────
-
-export async function getExtras(): Promise<ExtraRow[]> {
-    const { data, error } = await supabase
-        .from('shopping_extras')
-        .select('id, label, checked')
-        .order('created_at');
-    if (error) { console.error('getExtras:', error); return []; }
-    return (data ?? []) as ExtraRow[];
+async function findListRow(
+    key: string, family: UnitFamily | null, unitHint: string | null,
+): Promise<ListRow | null> {
+    let q = supabase.from('shopping_extras').select(LIST_COLUMNS).eq('item_key', key);
+    // PostgREST needs `is` for null — `eq` against null matches nothing.
+    q = family === null ? q.is('family', null) : q.eq('family', family);
+    // Counted things are bucketed by the counted noun as well (see mergeKey).
+    if (family === 'count') q = unitHint === null ? q.is('unit_hint', null) : q.eq('unit_hint', unitHint);
+    const { data, error } = await q.maybeSingle();
+    if (error) { console.error('findListRow:', error); return null; }
+    return data ? toListRow(data as Record<string, unknown>) : null;
 }
 
-export async function addExtra(label: string): Promise<ExtraRow | null> {
+/**
+ * Type something onto the list by hand.
+ *
+ * Goes through the same merge as everything else (OM49 review finding 2):
+ * ticking "Rice" in the pantry on two visits used to leave two rows, because
+ * nothing compared them.
+ */
+export async function addExtra(label: string): Promise<CopyResult> {
     const clean = label.trim();
-    if (!clean) return null;
-    const { data, error } = await supabase
-        .from('shopping_extras')
-        .insert([{ label: clean }])
-        .select('id, label, checked')
-        .single();
-    if (error) { console.error('addExtra:', error); return null; }
-    return data as ExtraRow;
+    if (!clean) return { added: 0, merged: 0, failed: 0 };
+    // Parsed like any other line, so "2 L milk" typed by hand carries its
+    // amount and merges with the milk a recipe put there. It used to be sent
+    // with qty_base null, which made a merge a silent no-op: the row was
+    // already on the list, nothing changed, and the caller was told `true`.
+    return copyLinesToList([toCopyLine(clean)]);
 }
 
-export async function setExtraChecked(id: string, checked: boolean): Promise<void> {
-    const { error } = await supabase.from('shopping_extras').update({ checked }).eq('id', id);
-    if (error) console.error('setExtraChecked:', error);
-}
-
-export async function removeExtra(id: string): Promise<boolean> {
+export async function removeFromList(id: string): Promise<boolean> {
     const { error } = await supabase.from('shopping_extras').delete().eq('id', id);
-    if (error) { console.error('removeExtra:', error); return false; }
+    if (error) { console.error('removeFromList:', error); return false; }
     return true;
 }
 
@@ -220,7 +379,7 @@ export interface TickState {
      * OM46 — when the list was last touched. A trip that has been sitting
      * untouched for AUTO_FINISH_MS is over, whether or not anyone pressed the
      * button. Null means no trip is in progress, and a list nobody has started
-     * must never auto-finish — otherwise a basket left alone over a weekend
+     * must never auto-finish — otherwise a list left alone over a weekend
      * would quietly empty itself.
      */
     lastAt: Date | null;
@@ -235,7 +394,7 @@ export async function getTicks(): Promise<TickState> {
     // The clock comes from EVERY row, not just the ticked ones: unticking
     // something is activity too, and it leaves a row with checked=false and a
     // fresh `updated_at`. Reading the clock off ticked rows only meant a shopper
-    // who corrected a mis-tap could look an hour idle seconds later.
+    // who corrected a mis-tap could look 15 minutes idle seconds later.
     let lastAt: Date | null = null;
     for (const r of data ?? []) {
         const at = new Date(r.updated_at as string);
@@ -246,206 +405,103 @@ export async function getTicks(): Promise<TickState> {
 }
 
 export async function setTick(lineKey: string, checked: boolean): Promise<void> {
+    // `updated_at` is deliberately NOT sent: migration 024 has Postgres stamp
+    // it. The client used to write its own clock into the column the timeout
+    // then measured, which made the whole server-clock exercise circular.
     const { error } = await supabase
         .from('shopping_ticks')
-        .upsert({ line_key: lineKey, checked, updated_at: new Date(serverNow()).toISOString() },
-                { onConflict: 'household_id,line_key' });
+        .upsert({ line_key: lineKey, checked }, { onConflict: 'household_id,line_key' });
     if (error) console.error('setTick:', error);
 }
 
-/** Clear every tick — "we've done the shop". */
-export async function clearTicks(): Promise<void> {
-    const { error } = await supabase.from('shopping_ticks').delete().neq('line_key', '');
-    if (error) console.error('clearTicks:', error);
-}
-
-// ── the list itself ─────────────────────────────────────────────────────────
-
 /**
- * Ingredient lines that are instructions in disguise. Kept deliberately short —
- * over-filtering silently drops something you needed to buy, which is far worse
- * than a slightly odd line on the list.
- */
-const NOT_SHOPPING = /^[-*•\s\d.,/½¼¾]*(cups?|cup of|ml|litres?)?\s*(pasta |starchy |reserved )?(cooking )?water\b|^[-*•\s]*ice\b|^[-*•\s]*water\b/i;
-
-/**
- * The lines of a recipe that are actually things you buy.
+ * Clear ticks — every one, or only the named keys.
  *
- * Extracted from `buildList` for OM46 so that "which keys does this dish still
- * contribute?" and "what does the list show?" cannot answer differently — a
- * dish counted as fully bought against one rule and rendered against another
- * would either strand a dish forever or delete one you still needed.
+ * Scoped by default at the call sites that finish a trip: wiping the whole
+ * household's ticks would throw away what the OTHER shopper had just ticked on
+ * their phone, mid-shop. "Untick everything" is the one caller that really
+ * means all of them, and a person pressed it.
  */
-export function usableIngredientLines(ingredients: string): string[] {
-    return ingredients
-        .split('\n')
-        .map((l) => l.trim())
-        .filter(Boolean)
-        // Drop section headings ("For the sauce:") — they are not shopping.
-        .filter((l) => !/^[-*•\s]*[^:]{0,40}:$/.test(l))
-        // …and things nobody buys. "1.5 pasta cooking water" on a shopping
-        // list is noise that makes the real lines harder to scan.
-        .filter((l) => !NOT_SHOPPING.test(l));
-}
-
-/** The canonical keys one basket row still contributes to the list. */
-export function dishLineKeys(row: BasketRow): string[] {
-    const recipe = row.recipes;
-    if (!recipe?.ingredients) return [];
-    const excluded = new Set(row.excluded ?? []);
-    const keys: string[] = [];
-    for (const line of usableIngredientLines(recipe.ingredients)) {
-        const key = shoppingKey(parseIngredient(line).item || line);
-        if (excluded.has(key) || excluded.has(canonicaliseIngredient(line))) continue;
-        keys.push(key);
-    }
-    return Array.from(new Set(keys));
-}
-
-export interface BuiltList {
-    lines: ShoppingLine[];
-    /** Dishes whose ingredients carry no usable quantities at all. */
-    unscalable: string[];
-}
-
-/**
- * Turn the basket into one aggregated list.
- *
- * A recipe with no base serving count scales ×1 — never a guess. A recipe
- * whose lines don't parse still contributes them, verbatim and unscaled, and
- * is named in `unscalable` so the page can say why rather than quietly showing
- * a short list.
- */
-export function buildList(basket: BasketRow[]): BuiltList {
-    const entries: Array<{ parsed: ReturnType<typeof parseIngredient>; source: string; key: string }> = [];
-    const unscalable: string[] = [];
-
-    for (const row of basket) {
-        const recipe = row.recipes;
-        if (!recipe?.ingredients) continue;
-
-        const base = recipe.servings && recipe.servings > 0 ? recipe.servings : null;
-        const factor = base ? row.servings / base : 1;
-
-        const lines = usableIngredientLines(recipe.ingredients);
-
-        // OM42 — what the user unticked on the recipe page stays off the list.
-        const excluded = new Set(row.excluded ?? []);
-
-        let parsedAny = false;
-        for (const line of lines) {
-            const parsed = scale(parseIngredient(line), factor);
-            const key = shoppingKey(parsed.item || line);
-            if (excluded.has(key) || excluded.has(canonicaliseIngredient(line))) continue;
-            if (parsed.qty !== null) parsedAny = true;
-            entries.push({ parsed, source: recipe.title, key });
-        }
-        if (lines.length && !parsedAny) unscalable.push(recipe.title);
-    }
-
-    const lines = aggregate(entries).sort((a, b) => a.item.localeCompare(b.item));
-    return { lines, unscalable };
-}
-
-/** Stable key for tick state — survives servings changes and re-aggregation. */
-export function lineKey(line: ShoppingLine): string {
-    return shoppingKey(line.item);
+export async function clearTicks(keys?: string[]): Promise<boolean> {
+    if (keys && keys.length === 0) return true;
+    const q = supabase.from('shopping_ticks').delete();
+    const { error } = keys ? await q.in('line_key', keys) : await q.neq('line_key', '');
+    if (error) { console.error('clearTicks:', error); return false; }
+    return true;
 }
 
 // ── finishing the shop ──────────────────────────────────────────────────────
 
 export interface TripResult {
-    /** Distinct things marked bought. */
+    /** Things taken off the list because you bought them. */
     bought: number;
-    /** Dishes with nothing left to buy. They STAY on the list — see below. */
-    dishesDone: string[];
-    /** Staples put back to "we have this". */
-    staplesRestocked: number;
-    /** Hand-typed extras deleted. */
-    extrasCleared: number;
+    /** Things left on it because you did not tick them. */
+    remaining: number;
     /**
-     * A write failed. The ticks are deliberately left alone when this is set, so
-     * nothing is reported bought that was not actually recorded.
+     * The delete failed. The ticks are deliberately left alone when this is
+     * set, so nothing is reported bought that was not actually recorded.
      */
     failed: boolean;
+    /**
+     * An automatic finish that found the trip was NOT idle after all, and did
+     * nothing. Someone else is still shopping.
+     */
+    skipped?: boolean;
 }
 
 /**
- * OM46 — close the shopping trip.
+ * OM49 — "Checked out": the ticked things are bought, so they leave the list.
  *
- * Max, 2026-08-26: "at the end of the shop either a finished shopping button,
- * or if it is left more than an hour — all the items on the shopping list are
- * considered bought." His call on the scope: **only the ticked items**. Whatever
- * you did not tick is left exactly where it was, so the button is safe to press
- * halfway round the shop and the hour-long timeout can never throw away
- * something you still need.
+ * Max, 2026-08-26/27: "either a finished shopping button, or if it is left more
+ * than [15 minutes] — all the items on the shopping list are considered
+ * bought", and "then we say checked out and it all resets". His call on the
+ * scope, unchanged from OM46: **only the ticked items**. Whatever you did not
+ * tick stays exactly where it was, so the button is safe to press halfway round
+ * the shop and the timeout can never throw away something you still need.
  *
- * Each kind of item records "bought" in the place that makes it stay bought:
+ * Under OM49 this is one delete rather than three different ways of recording
+ * "bought" — that is the point of the list being copied rather than derived.
  *
- *   ingredients  -> the dish's `excluded` keys (they are computed lines with no
- *                   row of their own, so the dish is the only durable home)
- *   staples      -> `pantry_items.needed = false` — you bought the milk, so the
- *                   pantry is no longer low on it
- *   extras       -> the row is deleted; a hand-typed one-off is finished with
- *
- * ⚠️ A dish is NEVER removed from the basket here, even when every one of its
- * ingredients has been bought. The list aggregates identical ingredients across
- * dishes, so ticking "butter" for the cake also satisfies the last outstanding
- * line of a curry you have not shopped for — and an hour-long timeout that can
- * silently delete a meal you planned is not a feature. The dish stays, showing
- * that there is nothing left to buy for it, and you remove it yourself.
- *
- * Ticks are cleared only once every write has succeeded: clearing them after a
- * partial failure would report items bought that were never recorded anywhere.
+ * ⚠️ It re-reads the list and the ticks rather than trusting what the page was
+ * showing. Two people shop off this list at once: the caller's copy can be
+ * minutes old, and deleting from it would take out a row whose amount grew
+ * after the snapshot was taken. For the same reason an AUTOMATIC finish
+ * re-checks idleness against the freshly-read clock — an idle tab must not end
+ * a shop that the other handset is in the middle of.
  */
-export async function finishTrip(
-    basket: BasketRow[],
-    neededIds: string[],
-    extraIds: string[],
-    ticks: Set<string>,
-): Promise<TripResult> {
-    const boughtKeys = new Set<string>();
-    const dishesDone: string[] = [];
-    let failed = false;
+export async function finishTrip(auto = false): Promise<TripResult> {
+    const [rows, tickState] = await Promise.all([getList(), getTicks()]);
+    const ticks = tickState.keys;
 
-    // ── ingredients ──────────────────────────────────────────────────────
-    for (const row of basket) {
-        const keys = dishLineKeys(row);
-        const got = keys.filter((k) => ticks.has(k));
-        if (!got.length) continue;
-
-        const ok = await setBasketExcluded(
-            row.id, Array.from(new Set([...(row.excluded ?? []), ...got])));
-        if (!ok) { failed = true; continue; }
-
-        got.forEach((k) => boughtKeys.add(k));
-        if (got.length === keys.length) dishesDone.push(row.recipes?.title ?? 'Dish');
+    if (auto && !tripIsStale(tickState.lastAt, ticks)) {
+        return { bought: 0, remaining: rows.length, failed: false, skipped: true };
     }
 
-    // ── staples ──────────────────────────────────────────────────────────
-    let staplesRestocked = 0;
-    for (const id of neededIds) {
-        if (!ticks.has(pantryTickKey(id))) continue;
-        if (!await setPantryNeeded(id, false)) { failed = true; continue; }
-        boughtKeys.add(pantryTickKey(id));
-        staplesRestocked++;
+    const bought = rows.filter((r) => ticks.has(extraTickKey(r.id)));
+    const remaining = rows.length - bought.length;
+
+    if (!bought.length) {
+        // Nothing ticked, or only ticks left over from rows somebody else
+        // removed. Clear those so the timeout does not keep re-firing on a trip
+        // with nothing in it.
+        await clearTicks([...ticks]);
+        return { bought: 0, remaining, failed: false };
     }
 
-    // ── extras ───────────────────────────────────────────────────────────
-    let extrasCleared = 0;
-    for (const id of extraIds) {
-        if (!ticks.has(extraTickKey(id))) continue;
-        if (!await removeExtra(id)) { failed = true; continue; }
-        boughtKeys.add(extraTickKey(id));
-        extrasCleared++;
+    const boughtKeys = bought.map((r) => extraTickKey(r.id));
+    const { error } = await supabase
+        .from('shopping_extras')
+        .delete()
+        .in('id', bought.map((r) => r.id));
+    if (error) {
+        console.error('finishTrip:', error);
+        return { bought: 0, remaining: rows.length, failed: true };
     }
 
-    // Only now is every tick recorded somewhere durable. On a partial failure
-    // the board is left exactly as it was, so the shopper can press the button
-    // again rather than lose what they had ticked.
-    if (!failed) await clearTicks();
-
-    return { bought: boughtKeys.size, dishesDone, staplesRestocked, extrasCleared, failed };
+    // Only the ticks belonging to rows that are now gone. Clearing the lot
+    // would discard whatever the other shopper has ticked since.
+    await clearTicks(boughtKeys);
+    return { bought: bought.length, remaining, failed: false };
 }
 
 /**

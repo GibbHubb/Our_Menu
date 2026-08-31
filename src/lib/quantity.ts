@@ -200,7 +200,16 @@ export interface ShoppingLine {
     unparsed: string[];
 }
 
-function toBase(p: ParsedIngredient): number | null {
+/**
+ * The amount in the family's base unit (g / ml / one-of-them), which is the
+ * only form two lines can be added up in.
+ *
+ * OM49 exports it: the list is copied rather than derived now, so a row has to
+ * store the amount somewhere it can be summed against the next Add. Storing
+ * "2 cans" as text and re-parsing it later would put the parser between you and
+ * a number you already had.
+ */
+export function toBaseAmount(p: ParsedIngredient): number | null {
     if (p.qty === null) return null;
     if (!p.unit) return p.qty;
     const def = UNITS[p.unit];
@@ -208,7 +217,7 @@ function toBase(p: ParsedIngredient): number | null {
 }
 
 /** Render a base amount back into the friendliest unit of its family. */
-function display(base: number, family: UnitFamily, unitHint: string | null): string {
+export function formatAmount(base: number, family: UnitFamily, unitHint: string | null): string {
     const round = (n: number) => (Math.round(n * 100) / 100).toString();
     if (family === "mass") {
         return base >= 1000 ? `${round(base / 1000)} kg` : `${round(base)} g`;
@@ -221,7 +230,11 @@ function display(base: number, family: UnitFamily, unitHint: string | null): str
         }
         return base >= 1000 ? `${round(base / 1000)} l` : `${round(base)} ml`;
     }
-    return unitHint ? `${round(base)} ${unitHint}${base === 1 ? "" : "s"}` : round(base);
+    // "2 pinchs" and "2 bunchs" — a bare "s" is wrong after ch/sh/s/x/z, and
+    // these are units that end up on a list a person reads in a shop.
+    if (!unitHint) return round(base);
+    const plural = /(ch|sh|s|x|z)$/i.test(unitHint) ? `${unitHint}es` : `${unitHint}s`;
+    return `${round(base)} ${base === 1 ? unitHint : plural}`;
 }
 
 /**
@@ -243,7 +256,7 @@ export function aggregate(
         }
         if (!line.sources.includes(source)) line.sources.push(source);
 
-        const base = toBase(parsed);
+        const base = toBaseAmount(parsed);
         if (base === null || parsed.family === null) {
             line.unparsed.push(parsed.raw);
             continue;
@@ -259,7 +272,7 @@ export function aggregate(
         l.amounts = [...l._fam.entries()].map(([family, { total, hint }]) => ({
             qty: total,
             unit: hint,
-            display: display(total, family, hint),
+            display: formatAmount(total, family, hint),
         }));
         const { _fam, ...rest } = l;
         void _fam;

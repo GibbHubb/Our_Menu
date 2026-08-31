@@ -18,7 +18,10 @@ export interface PantryItem {
 export type PantryCategory = 'kitchen' | 'bathroom' | 'household';
 
 export const PANTRY_SECTIONS: Array<{ key: PantryCategory; label: string; hint: string }> = [
-  { key: 'kitchen',   label: 'Kitchen',   hint: 'Food and cooking staples — these are what "Cookable now" checks against.' },
+  // OM49 review finding 8 — this used to say these rows are "what Cookable now
+  // checks against". Cookable now is gone: the pantry no longer records what
+  // you have, it is the half of a shop that is not a recipe.
+  { key: 'kitchen',   label: 'Kitchen',   hint: 'Food and cooking staples — tick what you need and it goes on the list.' },
   { key: 'bathroom',  label: 'Bathroom',  hint: 'Toothpaste, shampoo, loo roll.' },
   { key: 'household', label: 'Household', hint: 'Washing powder, bin bags, cleaning.' },
 ];
@@ -47,19 +50,17 @@ export const COMMON_STAPLES: Record<PantryCategory, string[]> = {
 };
 
 /**
- * OM40 — flag/unflag a staple as needing to be bought.
+ * OM49 — `setPantryNeeded` was here, and is gone.
  *
- * Deliberately separate from removing it from the pantry: being out of olive
- * oil doesn't mean olive oil stops being something you keep in the house, and
- * deleting it would drop it out of the "Cookable now" calculation too.
+ * `pantry_items.needed` was the pantry holding an opinion that outlived the
+ * shop it came from: the screen opened wearing last week's decisions, and a row
+ * flagged before OM49 had no off switch left once the UI that set it went away
+ * (review finding 1). A tick is local to one walk down the pantry now, and what
+ * you pick is COPIED onto the list.
+ *
+ * The column stays in the database on purpose — dropping it is a follow-up, so
+ * there is a way back if this model turns out to be wrong.
  */
-export async function setPantryNeeded(id: string, needed: boolean): Promise<boolean> {
-  const { error } = await supabase.from('pantry_items').update({ needed }).eq('id', id);
-  // OM46 — reports failure, because finishing a shop must not clear a tick it
-  // did not manage to record.
-  if (error) { console.error('setPantryNeeded:', error); return false; }
-  return true;
-}
 
 export async function getPantryItems(): Promise<PantryItem[]> {
   const { data, error } = await supabase
@@ -157,12 +158,12 @@ export function recipeIngredientKeys(ingredients: string | undefined | null): st
   return lines.map(canonicaliseIngredient).filter((k) => k !== '');
 }
 
-/** True if every recipe ingredient is present in the pantry. */
-export function isCookableNow(ingredients: string | undefined | null, pantryKeys: Set<string>): boolean {
-  const keys = recipeIngredientKeys(ingredients);
-  if (!keys.length) return false;
-  return keys.every((k) => pantryKeys.has(k));
-}
+/**
+ * OM49 — `isCookableNow` and `pantryKeySet` were here, along with
+ * `usePantry.ts`, and are gone with the "Cookable now" filter they served.
+ * They answered "what can I cook from what's in the cupboard", which needs the
+ * pantry to be a record of what you have — the premise this ticket dropped.
+ */
 
 
 /** OM42 — move an item between sections. */

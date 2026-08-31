@@ -4,7 +4,6 @@ import { Link2, Pencil } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { isSeasonHighlight, currentSeason, SEASON_LABEL, type Season } from "@/lib/seasons";
-import AddToListButton from "./AddToListButton";  // OM40
 
 interface RecipeCardProps {
     recipe: Recipe;
@@ -84,10 +83,10 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                         )}
                     </div>
 
-                    {/* OM40 — quick add to the shopping list at the recipe's own yield */}
-                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                        <AddToListButton recipeId={recipe.id} baseServings={recipe.servings} variant="icon" />
-                    </div>
+                    {/* OM49 — the one-tap "add the whole dish" was here, and it
+                        contradicted the model it now sits inside: you decide what
+                        you need per ingredient, at the servings you chose, on the
+                        recipe. Opening the card is that route. */}
 
                     {/* OM49 — the cookable-now badge was here. The pantry no
                         longer records what you have, so nothing can answer it. */}

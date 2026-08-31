@@ -18,11 +18,7 @@ import { usePathname } from "next/navigation";
 import { BookOpen, Refrigerator, ShoppingCart } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
-import {
-    buildList, extraTickKey, getBasket, getExtras, getTicks, lineKey,
-    pantryTickKey, LIST_CHANGED_EVENT,
-} from "@/lib/shopping";
-import { getPantryItems } from "@/lib/pantry";
+import { extraTickKey, getList, getTicks, LIST_CHANGED_EVENT } from "@/lib/shopping";
 
 const TABS = [
     { href: "/", label: "Recipes", icon: BookOpen },
@@ -88,20 +84,15 @@ function useToBuyCount(user: ReturnType<typeof useAuth>["user"], pathname: strin
         let alive = true;
         void (async () => {
             if (!user) { if (alive) setToBuy(null); return; }
-            const [basket, extras, ticks, pantry] = await Promise.all([
-                getBasket(), getExtras(), getTicks(), getPantryItems(),
-            ]);
+            const [rows, ticks] = await Promise.all([getList(), getTicks()]);
             if (!alive) return;
-            const { lines } = buildList(basket);
-            // OM46 — a staple or an extra you have already ticked is in the
-            // basket, so it is not "still to buy". The badge counted them until
-            // the trip was finished, which meant the number on the tab
-            // disagreed with the "N still to get" on the page itself.
-            setToBuy(
-                lines.filter((l) => !ticks.keys.has(lineKey(l))).length
-                + extras.filter((e) => !ticks.keys.has(extraTickKey(e.id))).length
-                + pantry.filter((p) => p.needed && !ticks.keys.has(pantryTickKey(p.id))).length,
-            );
+            // OM49 — one list, so one count. It used to add up three sources
+            // and could disagree with the page it was counting.
+            //
+            // OM46 — something already ticked is in the basket, so it is not
+            // "still to buy": the badge counted them until the trip was
+            // finished, which is exactly when the number stopped mattering.
+            setToBuy(rows.filter((r) => !ticks.keys.has(extraTickKey(r.id))).length);
         })();
         return () => { alive = false; };
     }, [user, pathname, nonce]);
