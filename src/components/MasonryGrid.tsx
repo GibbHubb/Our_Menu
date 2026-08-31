@@ -11,7 +11,6 @@ interface MasonryGridProps {
     onClick?: (recipe: Recipe) => void;
     error?: string | null;
     /** OM12 — set of recipe ids whose ingredients are fully in the pantry. */
-    cookableSet?: Set<string>;
     /**
      * OM38 — there is no Supabase session. Every recipe is household-scoped and
      * RLS returns nothing to anon, so an empty grid means "signed out", not
@@ -31,7 +30,7 @@ interface MasonryGridProps {
     onClearFilters?: () => void;
 }
 
-export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, cookableSet, signedOut, totalCount, onClearFilters }: MasonryGridProps) {
+export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, signedOut, totalCount, onClearFilters }: MasonryGridProps) {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
@@ -133,7 +132,6 @@ export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, c
                             recipe={recipe}
                             onEdit={onEdit}
                             onClick={onClick}
-                            cookableNow={cookableSet?.has(recipe.id) ?? false}
                         />
                     ))}
                 </AnimatePresence>

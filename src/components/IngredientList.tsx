@@ -1,10 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Copy, Check, CheckCircle2 } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
-import { canonicaliseIngredient } from "@/lib/ingredients";
-import { usePantry } from "@/lib/usePantry";
 import { useUnitSystem } from "@/lib/useUnitSystem";  // OM27
 import { convertForDisplay } from "@/lib/unitConversion";  // OM27
 
@@ -17,8 +15,6 @@ interface IngredientListProps {
 export default function IngredientList({ ingredients, scale, setScale }: IngredientListProps) {
     const [items, setItems] = useState<ParsedItem[]>([]);
     const [showCopied, setShowCopied] = useState(false);
-    // OM12 — green check next to pantry-matched ingredients.
-    const { keys: pantryKeys, loaded: pantryLoaded } = usePantry();
     // OM27 — display unit system (metric/us); convert each line for display
     // but keep the underlying ParsedItem for scaling/copy semantics.
     const [unitSystem] = useUnitSystem();
@@ -125,15 +121,12 @@ export default function IngredientList({ ingredients, scale, setScale }: Ingredi
                     const displayQty = convQty !== null
                         ? `${formatQuantity(convQty)}${convUnit ? ` ${convUnit}` : ''}`
                         : null;
-                    const inPantry = pantryLoaded && pantryKeys.has(canonicaliseIngredient(item.name));
-
+                    // OM49 — no green tick for "you already have this". The pantry
+                    // is a list of things to consider buying, not a record of what
+                    // is in the cupboard, so it cannot answer that question.
                     return (
                         <div key={item.id} className="text-stone-700 leading-relaxed flex items-start gap-2">
-                            {inPantry ? (
-                                <CheckCircle2 className="mt-1 w-4 h-4 text-emerald-500 flex-shrink-0" />
-                            ) : (
-                                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-stone-300 flex-shrink-0" />
-                            )}
+                            <span className="mt-2 w-1.5 h-1.5 rounded-full bg-stone-300 flex-shrink-0" />
                             <span>
                                 {displayQty && <span className="font-bold mr-1">{displayQty}</span>}
                                 {item.name}

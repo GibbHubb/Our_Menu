@@ -8,7 +8,6 @@ import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUti
 import { supabase } from "@/lib/supabaseClient";
 import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
 import { canonicaliseIngredient } from "@/lib/ingredients";
-import { usePantry } from "@/lib/usePantry";
 import { addToBasket } from "@/lib/shopping";  // OM42
 
 interface Substitution { name: string; note: string; }
@@ -29,17 +28,18 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
     const [items, setItems] = useState<ParsedItem[]>([]);
     const [showCopied, setShowCopied] = useState(false);
     const [checked, setChecked] = useState<Record<string, boolean>>(checkedMap ?? {});
-    // OM12 — pantry-aware subtraction. Items whose canonical key is in the
-    // pantry are flagged "in-pantry" and hidden from the printable Copy List.
-    const { keys: pantryKeys, loaded: pantryLoaded } = usePantry();
     // OM8 — substitution state per item id
     const [subs, setSubs] = useState<Record<string, Substitution[]>>({});
     const [subsLoading, setSubsLoading] = useState<string | null>(null);
     const [subsError, setSubsError] = useState<Record<string, string>>({});
-    // OM42 — which lines go on the shopping list. Everything you don't already
-    // have starts selected; pantry staples start off. Max, 2026-08-25:
-    // "everything but the pantry to be selected".
-    const [excluded, setExcluded] = useState<Set<string>>(new Set());
+    // OM49 — INCLUSION, not exclusion. Max + Bron, 2026-08-27: "we are no longer
+    // treating this like a pantry tracker... we want the boxes to be blank to
+    // start". This replaces OM42's `excluded` set, where everything was on the
+    // list unless taken off and the app subtracted whatever it believed was in
+    // the cupboard — which is why 8 of 13 lines arrived pre-ticked and 5 arrived
+    // struck through as IN PANTRY. Nothing is on the list until someone puts it
+    // there, and the app holds no opinion about what you already own.
+    const [included, setIncluded] = useState<Set<string>>(new Set());
     const [adding, setAdding] = useState(false);
     const [added, setAdded] = useState(false);
 
@@ -133,37 +133,22 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
         setScale(newScale);
     };
 
-    const isInPantry = useCallback((item: ParsedItem) => {
-        if (!pantryLoaded) return false;
-        return pantryKeys.has(canonicaliseIngredient(item.name));
-    }, [pantryKeys, pantryLoaded]);
-
-    // OM42 — "selected" means "put this on the shopping list". The default is
-    // everything you do NOT already have; pantry staples start off. Before this,
-    // an item that was neither in the pantry nor ticked rendered struck-through
-    // and faded — i.e. the things you actually needed to buy looked like the
-    // ones you could ignore.
+    // OM49 — "selected" means "put this on the shopping list", and nothing is
+    // selected until you say so. Every ingredient is offered on equal terms:
+    // no pantry subtraction, no staple gets a head start.
     const isSelected = useCallback((item: ParsedItem) => {
         const key = canonicaliseIngredient(item.name) || checkedKey(item.name);
-        if (excluded.has(key)) return false;
-        if (isInPantry(item)) return false;
-        // `isStandard` is the "PANTRY" badge — salt, oil, the cup of pasta
-        // cooking water. Nobody buys those for a specific recipe, so they start
-        // off too; tick one if you actually are out of it.
-        if (item.isStandard) return false;
-        return true;
-    }, [excluded, isInPantry]);
+        return included.has(key);
+    }, [included]);
 
     const toggleSelected = useCallback((item: ParsedItem) => {
         const key = canonicaliseIngredient(item.name) || checkedKey(item.name);
-        setExcluded((prev) => {
+        setIncluded((prev) => {
             const next = new Set(prev);
-            // Unticking a normal item excludes it; ticking a pantry item means
-            // "actually, buy this too", which is the same switch inverted.
-            if (isSelected(item)) next.add(key); else next.delete(key);
+            if (next.has(key)) next.delete(key); else next.add(key);
             return next;
         });
-    }, [isSelected]);
+    }, []);
 
     /** OM42 — servings the scale slider currently represents. */
     const scaledServings = baseServings && baseServings > 0
@@ -306,7 +291,6 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                     const itemSubs = subs[item.id];
                     const itemSubError = subsError[item.id];
                     const isLoadingSubs = subsLoading === item.id;
-                    const inPantry = isInPantry(item);
                     const selected = isSelected(item);
 
                     return (
@@ -316,8 +300,8 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                                 className={`
                                     cursor-pointer group flex items-start gap-3 p-3 rounded-lg transition-colors select-none border
                                     ${selected
-                                        ? 'bg-white hover:bg-stone-50 border-stone-200'
-                                        : 'bg-stone-50/60 border-transparent'}
+                                        ? 'bg-emerald-50/60 border-emerald-200'
+                                        : 'bg-white hover:bg-stone-50 border-stone-200'}
                                 `}
                             >
                                 <div className={`
@@ -329,21 +313,17 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                                     {selected && <Check className="w-3.5 h-3.5" />}
                                 </div>
 
-                                <div className={`flex-1 text-sm leading-snug ${selected ? 'text-stone-900' : 'text-stone-400'}`}>
+                                {/* OM49 — an unticked line is a normal line, not a
+                                    dismissed one. It used to render struck through
+                                    and faded, which was survivable when only the
+                                    pantry items started off; now that everything
+                                    starts off, that styling would strike out the
+                                    whole recipe. Ticking adds emphasis instead. */}
+                                <div className="flex-1 text-sm leading-snug text-stone-900">
                                     {displayQty && <span className="font-bold mr-1.5">{displayQty}</span>}
-                                    <span className={selected ? '' : 'line-through decoration-stone-300'}>
+                                    <span className={selected ? 'font-medium' : ''}>
                                         {item.name}
                                     </span>
-                                    {inPantry && (
-                                        <span className="ml-2 text-[10px] uppercase font-bold tracking-widest text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
-                                            In pantry
-                                        </span>
-                                    )}
-                                {!inPantry && item.isStandard && (
-                                        <span className="ml-2 text-[10px] uppercase font-bold tracking-widest text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
-                                            Pantry
-                                        </span>
-                                    )}
                                 </div>
 
                                 {/* OM8 — "I don't have this" button */}

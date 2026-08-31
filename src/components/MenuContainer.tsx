@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { Category, Recipe } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
 import { apiFetch } from "@/lib/apiFetch";
@@ -12,12 +12,10 @@ import EditRecipeModal from "./EditRecipeModal";
 import DecisionMaker from "./DecisionMaker";
 import ChatAgent from "./ChatAgent";
 import CollectionBar from "./CollectionBar";
-import { Plus, Wand2, Database, Sparkles, X, ChefHat } from "lucide-react";
+import { Plus, Wand2, Database, Sparkles, X } from "lucide-react";
 import { INITIAL_RECIPES } from "@/lib/initialData";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { usePantry } from "@/lib/usePantry";
-import { isCookableNow } from "@/lib/pantry";
 import { currentSeason, isInSeason, SEASON_LABEL, type Season } from "@/lib/seasons";
 import { DIETS, DIET_LABEL, dietMatches, type Diet } from "@/lib/diet";  // OM30
 import { useAiEnabled } from "@/lib/useAiEnabled";  // OM35(c)
@@ -87,9 +85,11 @@ function MenuContent() {
     // getSession() is still in flight.
     const { user, loading: authLoading } = useAuth();
 
-    // OM12 — pantry-driven "Cookable now" filter.
-    const { keys: pantryKeys, loaded: pantryLoaded } = usePantry();
-    const [cookableOnly, setCookableOnly] = useState(false);
+    // OM49 — the "Cookable now" filter is gone. It answered "what can I cook
+    // with what is in the cupboard", which needs the pantry to be a record of
+    // what you HAVE. It is now a list of things to consider buying, so the
+    // question has no answer, and a chip that silently filters on a list nobody
+    // maintains any more is worse than no chip.
     // OM13 — in-season filter
     const [inSeasonOnly, setInSeasonOnly] = useState(false);
     const activeSeason = currentSeason() as Season;
@@ -101,7 +101,6 @@ function MenuContent() {
 
     // OM39 — one way out of a filter combination that matches nothing.
     const clearFilters = () => {
-        setCookableOnly(false);
         setInSeasonOnly(false);
         setDietFilter(null);
         setSelectedCollectionId(null);
@@ -172,16 +171,6 @@ function MenuContent() {
         fetchRecipes();
     }, []);
 
-    // OM12 — cookable-now set, recomputed when pantry or recipes change.
-    const cookableSet = useMemo(() => {
-        if (!pantryLoaded) return new Set<string>();
-        const ids = new Set<string>();
-        for (const r of recipes) {
-            if (isCookableNow(r.ingredients, pantryKeys)) ids.add(r.id);
-        }
-        return ids;
-    }, [recipes, pantryKeys, pantryLoaded]);
-
     // Filter Logic
     const filteredRecipes = recipes.filter((recipe) => {
         const normalizedSearch = searchTerm.toLowerCase();
@@ -203,16 +192,13 @@ function MenuContent() {
             ? true
             : membershipMap[selectedCollectionId]?.has(recipe.id) ?? false;
 
-        // OM12 — cookable-now filter
-        const matchesCookable = !cookableOnly || cookableSet.has(recipe.id);
-
         // OM13 — in-season filter (year-round recipes always pass)
         const matchesSeason = !inSeasonOnly || isInSeason(recipe.seasons);
 
         // OM30 — diet filter (untagged recipes excluded when a diet is active)
         const matchesDiet = !dietFilter || dietMatches(recipe.diet, [dietFilter]);
 
-        return matchesCategory && matchesSearch && !hideBackBurner && matchesCollection && matchesCookable && matchesSeason && matchesDiet;
+        return matchesCategory && matchesSearch && !hideBackBurner && matchesCollection && matchesSeason && matchesDiet;
     });
 
     // OM11 — fire-and-forget nutrition refresh after a recipe save. Runs only
@@ -437,22 +423,9 @@ function MenuContent() {
             </div>
             )}
 
-            {/* OM12 — Cookable-now chip + Pantry nav (sits between semantic search and collections) */}
+            {/* OM49 — the Cookable-now chip was here. The Pantry link stays: it
+                is the "then the house" half of the shop. */}
             <div className="max-w-7xl mx-auto px-4 pt-3 flex items-center gap-2 flex-wrap">
-                <button
-                    onClick={() => setCookableOnly((v) => !v)}
-                    disabled={!pantryLoaded || cookableSet.size === 0}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-                        cookableOnly
-                            ? "bg-emerald-600 text-white border-emerald-600"
-                            : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    }`}
-                    title={cookableSet.size === 0 ? "Add ingredients to your pantry to enable" : "Show only recipes you can cook with what's in your pantry"}
-                >
-                    <ChefHat className="w-3.5 h-3.5" />
-                    Cookable now
-                    <span className="text-[10px] font-mono opacity-80">{cookableSet.size}</span>
-                </button>
                 <Link
                     href="/pantry"
                     className="text-xs text-stone-500 hover:text-stone-900 underline underline-offset-2"
@@ -539,7 +512,6 @@ function MenuContent() {
                         onSeed={handleSeedData}
                         onEdit={handleOpenEdit}
                         error={error}
-                        cookableSet={cookableSet}
                         signedOut={!authLoading && !user}
                         totalCount={recipes.length}
                         onClearFilters={clearFilters}

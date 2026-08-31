@@ -4,8 +4,6 @@ import { useState, useEffect } from "react";
 import RecipeCard from "./RecipeCard";
 // OM28 — pantry + season filters reuse the existing helpers; no new schema.
 import { isInSeason } from "@/lib/seasons";
-import { isCookableNow } from "@/lib/pantry";
-import { usePantry } from "@/lib/usePantry";
 import { DIETS, DIET_LABEL, dietMatches, type Diet } from "@/lib/diet";  // OM30
 
 interface DecisionMakerProps {
@@ -21,12 +19,10 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
     const [selectedCategory, setSelectedCategory] = useState<string>("All");
     // OM28 — three optional combinators on top of the existing category filter.
     const [seasonOnly, setSeasonOnly] = useState(false);
-    const [pantryOnly, setPantryOnly] = useState(false);
     const [topRatedOnly, setTopRatedOnly] = useState(false);
     // OM30 — 🥗 diet filter; empty = no diet constraint.
     const [diets, setDiets] = useState<Diet[]>([]);
 
-    const { keys: pantryKeys } = usePantry();
 
     // Pick a random recipe
     const pickRandom = () => {
@@ -37,9 +33,6 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
         // OM28 — apply the surprise-me filter stack.
         if (seasonOnly) {
             candidates = candidates.filter(r => isInSeason(r.seasons));
-        }
-        if (pantryOnly) {
-            candidates = candidates.filter(r => isCookableNow(r.ingredients, pantryKeys));
         }
         if (topRatedOnly) {
             candidates = candidates.filter(r => (r.rating || 0) >= 4);
@@ -107,7 +100,6 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
                 <div className="flex flex-wrap justify-center gap-2 mb-6 max-w-xs">
                     {([
                         ["🌿 In season", seasonOnly, setSeasonOnly],
-                        ["🥕 Pantry-ready", pantryOnly, setPantryOnly],
                         ["⭐ Top rated", topRatedOnly, setTopRatedOnly],
                     ] as const).map(([label, val, set]) => (
                         <button
