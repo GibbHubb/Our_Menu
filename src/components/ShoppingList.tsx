@@ -237,6 +237,37 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
 
     if (!items.length) return <div className="text-stone-400 italic">No items found.</div>;
 
+    /* OM42 — one way to get these onto the shopping list. The recipe page used
+       to carry this list AND a separate "Add to list" panel that ignored it;
+       Max: "see how we have done it twice".
+       Rendered above AND below the list (Max, 2026-09-01) — a long ingredient
+       list meant ticking your way down and then scrolling back up to act on it.
+       One handler, one piece of state, two positions. */
+    const addBar = recipeId ? (
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+            <button
+                onClick={() => void handleAddToList()}
+                disabled={adding || selectedItems.length === 0}
+                className={`flex-1 min-w-[220px] py-2.5 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${
+                    added ? 'bg-emerald-600 text-white' : 'bg-stone-900 text-white hover:bg-stone-800'
+                }`}
+            >
+                {adding ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : added ? <Check className="w-4 h-4" />
+                    : <ShoppingCart className="w-4 h-4" />}
+                {added
+                    ? 'Added to the shopping list'
+                    : `Add ${selectedItems.length} item${selectedItems.length === 1 ? '' : 's'} to shopping list`}
+            </button>
+            <Link
+                href="/shopping"
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-stone-100 text-stone-700 hover:bg-stone-200 flex items-center gap-1.5"
+            >
+                Shopping list <ArrowRight className="w-4 h-4" />
+            </Link>
+        </div>
+    ) : null;
+
     return (
         <div className="space-y-4">
             {/* Controls */}
@@ -285,33 +316,7 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                 </div>
             </div>
 
-            {/* OM42 — one way to get these onto the shopping list. The recipe
-                page used to carry this list AND a separate "Add to list" panel
-                that ignored it; Max: "see how we have done it twice". */}
-            {recipeId && (
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <button
-                        onClick={() => void handleAddToList()}
-                        disabled={adding || selectedItems.length === 0}
-                        className={`flex-1 min-w-[220px] py-2.5 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${
-                            added ? 'bg-emerald-600 text-white' : 'bg-stone-900 text-white hover:bg-stone-800'
-                        }`}
-                    >
-                        {adding ? <Loader2 className="w-4 h-4 animate-spin" />
-                            : added ? <Check className="w-4 h-4" />
-                            : <ShoppingCart className="w-4 h-4" />}
-                        {added
-                            ? 'Added to the shopping list'
-                            : `Add ${selectedItems.length} item${selectedItems.length === 1 ? '' : 's'} to shopping list`}
-                    </button>
-                    <Link
-                        href="/shopping"
-                        className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-stone-100 text-stone-700 hover:bg-stone-200 flex items-center gap-1.5"
-                    >
-                        Shopping list <ArrowRight className="w-4 h-4" />
-                    </Link>
-                </div>
-            )}
+            {addBar}
 
             {addError && (
                 <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -396,6 +401,9 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                     );
                 })}
             </div>
+
+            {/* The same bar again, for the tick-your-way-down pass. */}
+            {addBar}
         </div>
     );
 }

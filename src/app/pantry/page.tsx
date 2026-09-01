@@ -139,6 +139,39 @@ export default function PantryPage() {
 
   const previewKey = single.trim() ? canonicaliseIngredient(single) : "";
 
+  /* OM49 — the one way off this screen and onto the list. It sits at the
+     top because the sections are chips: walk Kitchen, walk Bathroom, walk
+     Household, and the count keeps rising across all three, so burying the
+     button under one section's list would hide it from a walk that ended in
+     another. It reads 0 and is disabled until something is ticked.
+     Rendered again under the list (Max, 2026-09-01) — the pantry is 30 rows
+     long, so ticking your way to the bottom used to mean scrolling all the
+     way back up to act on it. Same handler, same state, two positions. */
+  const addBar = (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        onClick={() => void handleAddSelected()}
+        disabled={adding || selectedCount === 0}
+        className={`flex-1 min-w-[220px] py-2.5 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${
+          addedCount !== null ? "bg-emerald-600 text-white" : "bg-stone-900 text-white hover:bg-stone-800"
+        }`}
+      >
+        {adding ? <Loader2 className="w-4 h-4 animate-spin" />
+          : addedCount !== null ? <Check className="w-4 h-4" />
+          : <ShoppingCart className="w-4 h-4" />}
+        {addedCount !== null
+          ? `Added ${addedCount} item${addedCount === 1 ? "" : "s"} to the shopping list`
+          : `Add ${selectedCount} item${selectedCount === 1 ? "" : "s"} to shopping list`}
+      </button>
+      <Link
+        href="/shopping"
+        className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-stone-100 text-stone-700 hover:bg-stone-200"
+      >
+        Shopping list →
+      </Link>
+    </div>
+  );
+
   return (
     <AppShell
       width="narrow"
@@ -195,34 +228,7 @@ export default function PantryPage() {
           {PANTRY_SECTIONS.find((x) => x.key === section)?.hint}
         </p>
 
-        {/* OM49 — the one way off this screen and onto the list. It sits at the
-            top because the sections are chips: walk Kitchen, walk Bathroom,
-            walk Household, and the count keeps rising across all three, so
-            burying the button under one section's list would hide it from a
-            walk that ended in another. It reads 0 and is disabled until
-            something is ticked. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => void handleAddSelected()}
-            disabled={adding || selectedCount === 0}
-            className={`flex-1 min-w-[220px] py-2.5 px-4 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${
-              addedCount !== null ? "bg-emerald-600 text-white" : "bg-stone-900 text-white hover:bg-stone-800"
-            }`}
-          >
-            {adding ? <Loader2 className="w-4 h-4 animate-spin" />
-              : addedCount !== null ? <Check className="w-4 h-4" />
-              : <ShoppingCart className="w-4 h-4" />}
-            {addedCount !== null
-              ? `Added ${addedCount} item${addedCount === 1 ? "" : "s"} to the shopping list`
-              : `Add ${selectedCount} item${selectedCount === 1 ? "" : "s"} to shopping list`}
-          </button>
-          <Link
-            href="/shopping"
-            className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-stone-100 text-stone-700 hover:bg-stone-200"
-          >
-            Shopping list →
-          </Link>
-        </div>
+        {addBar}
 
         {addError && (
           <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -378,6 +384,11 @@ export default function PantryPage() {
             </button>
           )}
         </div>
+
+        {/* The same bar again, for the walk that ends at the bottom of the
+            list. Only when this section actually has rows — under an empty
+            state it would sit inches below the top one. */}
+        {!loading && items.filter((i) => i.category === section).length > 0 && addBar}
       </div>
     </AppShell>
   );
