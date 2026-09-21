@@ -1,7 +1,13 @@
 
 import { NextResponse } from "next/server";
+import { getRequestUser } from "@/lib/supabaseServer";
 
 export async function POST(req: Request) {
+    // OM55 — signed-in callers only. This route calls a paid/LLM backend (or fetches an arbitrary
+    // URL) on the caller's behalf; anonymous callers could burn it or probe with it.
+    if (!(await getRequestUser(req))) {
+        return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 });
+    }
     try {
         const body = await req.json();
         const { messages } = body;

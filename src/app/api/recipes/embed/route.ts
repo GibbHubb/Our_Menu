@@ -3,17 +3,19 @@
 // Also ensure OPENAI_API_KEY is set in .env.local.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabaseServer';
+import { createRequestClient, getRequestUser } from '@/lib/supabaseServer';
 import OpenAI from 'openai';
 
-export async function POST(_req: NextRequest) {
+export async function POST(req: NextRequest) {
+    // OM55 — this used the ADMIN client with no auth at all, and returned {id, title} for every
+    // recipe in every household to any anonymous caller (inert only because no LLM key exists
+    // yet). Now: signed-in only, and the caller's own RLS-scoped client, so it embeds and
+    // reports exactly the recipes that caller can see.
+    if (!(await getRequestUser(req))) {
+        return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 });
+    }
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    // OM14c — this is a batch job over EVERY recipe, so it is deliberately the
-    // admin client rather than a caller-scoped one: it must see all rows. It
-    // previously used the shared browser singleton, which happened to work
-    // only because nothing was RLS-scoped yet.
-    const supabase = createAdminClient();
+    const supabase = createRequestClient(req);
     // Fetch all recipes
     const { data: recipes, error } = await supabase
         .from('recipes')

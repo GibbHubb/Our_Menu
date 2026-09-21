@@ -2,6 +2,7 @@
 // the heavy lifting (JSON-LD / OG extraction) lives in `@/lib/recipeImport`.
 
 import { NextResponse } from "next/server";
+import { getRequestUser } from "@/lib/supabaseServer";
 import { parseRecipeHtml } from "@/lib/recipeImport";
 
 const FETCH_TIMEOUT_MS = 10_000;
@@ -44,6 +45,11 @@ function rejectUrl(raw: string): string | null {
 }
 
 export async function POST(req: Request) {
+    // OM55 — signed-in callers only. This route calls a paid/LLM backend (or fetches an arbitrary
+    // URL) on the caller's behalf; anonymous callers could burn it or probe with it.
+    if (!(await getRequestUser(req))) {
+        return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 });
+    }
     let body: { url?: string } = {};
     try { body = await req.json(); } catch { /* fall through */ }
     const url = (body.url || "").trim();

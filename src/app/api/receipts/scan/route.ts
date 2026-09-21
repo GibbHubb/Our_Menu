@@ -1,11 +1,17 @@
 // Requires: ANTHROPIC_API_KEY in .env.local
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getRequestUser } from '@/lib/supabaseServer';
 import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
+    // OM55 — signed-in callers only. This route calls a paid/LLM backend (or fetches an arbitrary
+    // URL) on the caller's behalf; anonymous callers could burn it or probe with it.
+    if (!(await getRequestUser(req))) {
+        return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 });
+    }
     const formData = await req.formData();
     const file = formData.get('image') as File | null;
     if (!file) return NextResponse.json({ error: 'No image provided' }, { status: 400 });
