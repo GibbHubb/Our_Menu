@@ -16,8 +16,8 @@
 
 - [ ] Every API endpoint enforces authorization checks
 - [ ] Role-based access control (RBAC) is implemented and tested
-- [ ] Tenant isolation enforced at the data layer (users cannot access other tenants' data)
-- [ ] Default-deny: access is denied unless explicitly granted
+- [ ] Tenant isolation enforced at the data layer (users cannot access other tenants' data) — OM56: migration written (`supabase/migrations/025_rls_gaps.sql`) to RLS-parent `recipe_embeddings` on its owning `recipes` row; **not yet applied to prod** — tick once Max runs it. `scripts/rls_audit.sql` audits every `public` table for this on demand.
+- [ ] Default-deny: access is denied unless explicitly granted — OM56 also found two un-RLS'd debris tables (`recipes_backup_om40`, `recipes_orphan_backup_2026_08_26`) that anon can currently read *and write* via the publishable key (confirmed live: `GET recipes_backup_om40` returns all 96 rows, no auth). Fix is in the same migration, **not yet applied**. `scripts/rls_audit.sql`'s pass condition is `0` tables with `rowsecurity = false`; re-run it after any new table lands.
 - [ ] Admin functions are restricted to admin roles only
 
 ## Session management
