@@ -66,8 +66,11 @@ export async function getPantryItems(): Promise<PantryItem[]> {
     .select('*')
     .order('display_name');
   if (error) {
+    // OM59 — used to return [] here, which is indistinguishable on screen
+    // from an actually-empty pantry. The caller needs to know this failed so
+    // it can show a retry instead of "nothing here yet".
     console.error('getPantryItems:', error);
-    return [];
+    throw new Error('pantry_items fetch failed');
   }
   return (data ?? []) as PantryItem[];
 }

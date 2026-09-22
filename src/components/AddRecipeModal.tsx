@@ -39,6 +39,12 @@ const EMPTY_FORM = {
 
 export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: AddRecipeModalProps) {
     const [loading, setLoading] = useState(false);
+    // OM59 — was a browser alert box: "Error adding recipe! " + error.message. The save
+    // failed and nothing was lost (the form is still open with what was
+    // typed), so this is a persistent inline error next to the button that
+    // failed, not a toast — a toast can be missed, and the user would have
+    // no way to tell whether "Save Dish" is safe to press again.
+    const [addError, setAddError] = useState<string | null>(null);
     const [formData, setFormData] = useState<typeof EMPTY_FORM>(EMPTY_FORM);
 
     // OM10 — URL-import state
@@ -49,7 +55,15 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
 
     if (!isOpen) return null;
 
+    // OM59 review — the modal stays mounted while hidden, so a save error must be
+    // cleared on close or the next Add opens already showing it.
+    const close = () => {
+        setAddError(null);
+        onClose();
+    };
+
     const reset = () => {
+        setAddError(null);
         setFormData(EMPTY_FORM);
         setImportUrl("");
         setImportError(null);
@@ -59,6 +73,7 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setAddError(null);
         try {
             const payload: AddRecipePayload = {
                 title: formData.title,
@@ -75,6 +90,7 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
             reset();
         } catch (err) {
             console.error("Failed to add recipe", err);
+            setAddError("Couldn't save this dish. Nothing was lost — try again.");
         } finally {
             setLoading(false);
         }
@@ -123,7 +139,7 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
             <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl animate-in zoom-in-95 duration-200">
                 <div className="flex items-center justify-between p-4 border-b border-stone-100 sticky top-0 bg-white z-10">
                     <h2 className="font-serif text-xl text-stone-900">Add New Dish</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-full transition-colors">
+                    <button onClick={close} className="p-2 hover:bg-stone-100 rounded-full transition-colors">
                         <X className="w-5 h-5 text-stone-500" />
                     </button>
                 </div>
@@ -337,10 +353,16 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                         </div>
                     )}
 
+                    {addError && (
+                        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                            {addError}
+                        </p>
+                    )}
+
                     <div className="pt-4 flex justify-end gap-2">
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={close}
                             className="px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50 rounded-lg transition-colors"
                         >
                             Cancel

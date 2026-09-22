@@ -1,15 +1,27 @@
 import { Recipe } from "@/lib/types";
 import RecipeCard from "./RecipeCard";
 import { motion, AnimatePresence } from "framer-motion";
-import { Database, AlertCircle, LogIn, FilterX } from "lucide-react";
+import { Database, LogIn, FilterX } from "lucide-react";
 import Link from "next/link";
+import { ErrorState } from "./StateViews";
 
 interface MasonryGridProps {
     recipes: Recipe[];
     onSeed?: () => void;
     onEdit?: (recipe: Recipe) => void;
     onClick?: (recipe: Recipe) => void;
-    error?: string | null;
+    /**
+     * OM59 — true when the fetch failed. Used to be the raw Supabase
+     * `error.message` rendered straight into the page (plus a dev-facing
+     * ".env.local / Vercel Environment Variables" instruction no household
+     * member can act on). It is now a flag: the real error still goes to
+     * `console.error` at the call site, and this only decides which state
+     * to show. This is also the fix for the `018` bug at the grid level — a
+     * failed fetch must never look like an empty kitchen.
+     */
+    error?: boolean;
+    /** Retries the fetch that set `error`. */
+    onRetryError?: () => void;
     /** OM12 — set of recipe ids whose ingredients are fully in the pantry. */
     /**
      * OM38 — there is no Supabase session. Every recipe is household-scoped and
@@ -30,20 +42,14 @@ interface MasonryGridProps {
     onClearFilters?: () => void;
 }
 
-export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, signedOut, totalCount, onClearFilters }: MasonryGridProps) {
+export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, onRetryError, signedOut, totalCount, onClearFilters }: MasonryGridProps) {
     if (error) {
         return (
-            <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-                <div className="bg-red-50 text-red-600 p-4 rounded-full mb-4">
-                    <AlertCircle className="w-8 h-8" />
-                </div>
-                <h3 className="text-xl font-serif text-stone-900 mb-2">Connection Error</h3>
-                <p className="text-stone-500 max-w-md mb-6">{error}</p>
-                <div className="text-sm bg-stone-100 p-4 rounded-lg text-left font-mono text-stone-600">
-                    Check your .env.local or Vercel Environment Variables.<br />
-                    Ensure NEXT_PUBLIC_SUPABASE_URL and KEY are correct.
-                </div>
-            </div>
+            <ErrorState
+                title="Couldn't load the menu"
+                detail="Check your connection and try again. Your recipes are safe — this is just the fetch failing."
+                onRetry={onRetryError}
+            />
         );
     }
 

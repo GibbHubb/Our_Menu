@@ -26,6 +26,7 @@ import {
 } from "@/lib/shopping";
 import AppShell from "@/components/AppShell";  // OM43
 import { aisleFor, AISLE_ORDER, AISLE_LABEL, AISLE_EMOJI, type Aisle } from "@/lib/aisles";  // OM45
+import { ErrorState } from "@/components/StateViews";  // OM59
 
 const AUTO_FINISH_MINUTES = Math.round(AUTO_FINISH_MS / 60_000);
 
@@ -38,6 +39,14 @@ export default function ShoppingPage() {
     // OM46 — the clock the inactivity auto-finish runs off.
     const [lastTickAt, setLastTickAt] = useState<Date | null>(null);
     const [loading, setLoading] = useState(true);
+    // OM59 — getList()/getTicks() used to swallow a fetch failure and return
+    // an empty list/no ticks, indistinguishable on screen from a genuinely
+    // empty list (rows.length === 0 either way). They now throw, and this
+    // tracks whether the CURRENT `rows` reflects a real failure — only
+    // matters when there is nothing already on screen (see the render
+    // below): a background reload failing after an action leaves whatever
+    // was already there rather than replacing it with an error page.
+    const [loadError, setLoadError] = useState(false);
     const [draft, setDraft] = useState("");
     const [copied, setCopied] = useState(false);
     // "that was already on the list" — a merge with no amount changes nothing
@@ -61,13 +70,24 @@ export default function ShoppingPage() {
     // the effect below trips react-hooks/set-state-in-effect, and the page
     // starts in `loading` anyway.
     const load = useCallback(async () => {
-        // The auto-finish measures minutes, so it measures them against the
-        // server's clock rather than this device's. Cheap and cached.
-        const [l, t] = await Promise.all([getList(), getTicks(), syncServerClock()]);
-        setRows(l);
-        setTicks(t.keys);
-        setLastTickAt(t.lastAt);
-        setLoading(false);
+        try {
+            // The auto-finish measures minutes, so it measures them against the
+            // server's clock rather than this device's. Cheap and cached.
+            const [l, t] = await Promise.all([getList(), getTicks(), syncServerClock()]);
+            setRows(l);
+            setTicks(t.keys);
+            setLastTickAt(t.lastAt);
+            setLoadError(false);
+        } catch (e) {
+            // OM59 — getList/getTicks throw on a fetch failure now. Leave
+            // whatever rows/ticks were already on screen alone; the render
+            // below only shows the failed state when there's nothing to fall
+            // back to.
+            console.error("shopping load:", e);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
     useEffect(() => {
@@ -178,6 +198,21 @@ export default function ShoppingPage() {
         );
     }
 
+    // OM59 — the `018` bug at this screen: a failed load must never look
+    // like an empty list. Only takes over the whole screen when there is
+    // nothing already on it — see `load()`'s comment.
+    if (loadError && rows.length === 0) {
+        return (
+            <div className="min-h-screen bg-stone-50">
+                <ErrorState
+                    title="Couldn't load the shopping list"
+                    detail="Check your connection and try again."
+                    onRetry={() => void load()}
+                />
+            </div>
+        );
+    }
+
     return (
         <AppShell
             width="narrow"
@@ -248,6 +283,15 @@ export default function ShoppingPage() {
                         >
                             <X className="w-4 h-4" />
                         </button>
+                    </div>
+                )}
+
+                {/* OM59 review — a failed refresh over rows already on screen
+                    must not pass for current data (e.g. just after Finished). */}
+                {loadError && rows.length > 0 && (
+                    <div className="mb-3 flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-4 py-2.5 text-sm">
+                        <span>Couldn&apos;t refresh the list. This may be out of date.</span>
+                        <button onClick={() => void load()} className="font-semibold underline underline-offset-2">Retry</button>
                     </div>
                 )}
 

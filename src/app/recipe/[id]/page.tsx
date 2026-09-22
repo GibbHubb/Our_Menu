@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { apiFetch } from "@/lib/apiFetch";
 import { Recipe } from "@/lib/types";
 import { CATEGORIES } from "@/lib/constants";
-import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Edit2, Save, MoreHorizontal, Pencil, Copy, Check, Sparkles, Loader2, AlertTriangle, ChefHat } from "lucide-react";
+import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Edit2, Save, MoreHorizontal, Pencil, Copy, Check, Sparkles, Loader2, AlertTriangle, AlertCircle, X, ChefHat } from "lucide-react";
 import { logCook, formatLastCooked } from "@/lib/cookLog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -23,6 +23,12 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
     const [recipe, setRecipe] = useState<Recipe | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    // OM59 — was two browser alert boxes: "Failed to save! Error: ${error.message}…
+    // Tip: Run 'repair_database.sql'" and a permission-denied variant with the
+    // same instruction. Neither is actionable by anyone using this app, and a
+    // failed save is a data-loss risk, so it is a persistent banner (not a
+    // timed toast) that stays until dismissed or the next successful save.
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     // Editing States
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -93,6 +99,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
         setRecipe(updated);
         setNotes(updated.notes || "");
         setShoppingList(updated.shopping_list || "");
+        setSaveError(null);
 
         // Exclude UI-only fields if any (though Recipe type maps to DB 1:1)
         const { data, error } = await supabase
@@ -112,18 +119,32 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
             .select('id');
 
         if (error) {
+            // OM59 — the raw Postgres error (and the repair_database.sql
+            // instruction) stayed in the console for debugging; the user
+            // gets a generic, actionable line instead. Whether that
+            // permission failure is still a live, recurring issue is an open
+            // question for Max (plan §8) — if it is, the fix belongs in RLS,
+            // not in this message.
             console.error("Update Error:", error);
-            alert(`Failed to save! Error: ${error.message}\nTip: Run 'repair_database.sql' in Supabase.`);
+            setSaveError("Couldn't save that change. Try again in a moment.");
+            throw error;
         } else if (!data || data.length === 0) {
-            alert("Failed to save! Permission denied (0 rows updated).\nPlease run 'repair_database.sql' in Supabase to fix permissions.");
+            console.error("Update Error: 0 rows updated (likely RLS/permission)");
+            setSaveError("Couldn't save — you may not have permission to edit this recipe.");
+            throw new Error("0 rows updated");
         }
     };
 
     const handleSaveNotes = async () => {
         if (!recipe) return;
         const updated = { ...recipe, notes };
-        await handleUpdateRecipe(updated);
-        setIsEditingNotes(false);
+        try {
+            await handleUpdateRecipe(updated);
+            setIsEditingNotes(false);
+        } catch {
+            // Stay in edit mode — handleUpdateRecipe already set saveError
+            // and the typed notes are still in the textarea, not lost.
+        }
     };
 
     const handleExtractRecipe = async () => {
@@ -174,18 +195,28 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
         if (!recipe || !pasteText.trim()) return;
         setSavingPaste(true);
         const updated = { ...recipe, ingredients: pasteText.trim() };
-        await handleUpdateRecipe(updated);
-        setShowPasteFallback(false);
-        setPasteText("");
-        setSavingPaste(false);
-        setExtractInfo("Saved pasted text to ingredients.");
+        try {
+            await handleUpdateRecipe(updated);
+            setShowPasteFallback(false);
+            setPasteText("");
+            setExtractInfo("Saved pasted text to ingredients.");
+        } catch {
+            // handleUpdateRecipe already set saveError; keep the pasted text
+            // on screen so nothing typed is lost.
+        } finally {
+            setSavingPaste(false);
+        }
     };
 
     const handleSaveShoppingList = async () => {
         if (!recipe) return;
         const updated = { ...recipe, shopping_list: shoppingList };
-        await handleUpdateRecipe(updated);
-        setIsEditingShoppingList(false);
+        try {
+            await handleUpdateRecipe(updated);
+            setIsEditingShoppingList(false);
+        } catch {
+            // Stay in edit mode — handleUpdateRecipe already set saveError.
+        }
     };
 
     if (loading) {
@@ -231,6 +262,21 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                     <Pencil className="w-5 h-5" />
                 </button>
             </div>
+
+            {saveError && (
+                <div className="max-w-4xl mx-auto px-4 pt-4">
+                    <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+                        <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <p className="flex-1 text-sm text-amber-900">{saveError}</p>
+                        <button
+                            onClick={() => setSaveError(null)}
+                            className="p-1 text-amber-600/60 hover:text-amber-900" aria-label="Dismiss"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <div className="max-w-4xl mx-auto">
                 {/* Hero Image */}
@@ -442,7 +488,10 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                                         setShoppingList(updated);
                                         if (recipe) {
                                             const updatedRecipe = { ...recipe, shopping_list: updated };
-                                            handleUpdateRecipe(updatedRecipe);
+                                            // Fire-and-forget: handleUpdateRecipe already
+                                            // surfaces saveError on failure; this just stops
+                                            // the rejection going to the console unhandled.
+                                            void handleUpdateRecipe(updatedRecipe).catch(() => {});
                                         }
                                     }}
                                 />

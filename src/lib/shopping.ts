@@ -181,7 +181,10 @@ export async function getList(): Promise<ListRow[]> {
         .from('shopping_extras')
         .select(LIST_COLUMNS)
         .order('created_at');
-    if (error) { console.error('getList:', error); return []; }
+    // OM59 — used to return [] on a fetch failure, which the page could not
+    // tell apart from a genuinely empty list. Throw so the caller can show a
+    // failed state with a retry instead of "nothing on it".
+    if (error) { console.error('getList:', error); throw new Error('shopping_extras fetch failed'); }
     return (data ?? []).map((r) => toListRow(r as Record<string, unknown>));
 }
 
@@ -276,7 +279,15 @@ export async function copyLinesToList(lines: CopyLine[]): Promise<CopyResult> {
     }
     if (!wanted.size) return { added: 0, merged: 0, failed: 0 };
 
-    const current = await getList();
+    // OM59 — getList() now throws instead of returning [] on a failed read.
+    // Merging against a list we could not read would insert duplicates, so the
+    // whole batch is reported as failed and the caller's retry message shows.
+    let current: ListRow[];
+    try {
+        current = await getList();
+    } catch {
+        return { added: 0, merged: 0, failed: wanted.size };
+    }
     const index = new Map(current.map((r) => [mergeKey(r.item_key, r.family, r.unit_hint), r]));
 
     let added = 0, merged = 0, failed = 0;
@@ -389,7 +400,9 @@ export async function getTicks(): Promise<TickState> {
     const { data, error } = await supabase
         .from('shopping_ticks')
         .select('line_key, checked, updated_at');
-    if (error) { console.error('getTicks:', error); return { keys: new Set(), lastAt: null }; }
+    // OM59 — see getList: throw instead of returning an empty state that
+    // looks identical to "nothing ticked yet".
+    if (error) { console.error('getTicks:', error); throw new Error('shopping_ticks fetch failed'); }
 
     // The clock comes from EVERY row, not just the ticked ones: unticking
     // something is activity too, and it leaves a row with checked=false and a
@@ -470,7 +483,14 @@ export interface TripResult {
  * a shop that the other handset is in the middle of.
  */
 export async function finishTrip(auto = false): Promise<TripResult> {
-    const [rows, tickState] = await Promise.all([getList(), getTicks()]);
+    // OM59 — a failed read throws now; never delete against a list we could not read.
+    let rows: ListRow[];
+    let tickState: Awaited<ReturnType<typeof getTicks>>;
+    try {
+        [rows, tickState] = await Promise.all([getList(), getTicks()]);
+    } catch {
+        return { bought: 0, remaining: 0, failed: true };
+    }
     const ticks = tickState.keys;
 
     if (auto && !tripIsStale(tickState.lastAt, ticks)) {

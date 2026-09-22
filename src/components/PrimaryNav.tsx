@@ -84,15 +84,25 @@ function useToBuyCount(user: ReturnType<typeof useAuth>["user"], pathname: strin
         let alive = true;
         void (async () => {
             if (!user) { if (alive) setToBuy(null); return; }
-            const [rows, ticks] = await Promise.all([getList(), getTicks()]);
-            if (!alive) return;
-            // OM49 — one list, so one count. It used to add up three sources
-            // and could disagree with the page it was counting.
-            //
-            // OM46 — something already ticked is in the basket, so it is not
-            // "still to buy": the badge counted them until the trip was
-            // finished, which is exactly when the number stopped mattering.
-            setToBuy(rows.filter((r) => !ticks.keys.has(extraTickKey(r.id))).length);
+            // OM59 — getList/getTicks now throw on a fetch failure instead of
+            // silently returning []. This badge is decorative, not the page's
+            // primary content, so a failure here just leaves it unset rather
+            // than showing a failed state — /shopping itself owns that.
+            try {
+                const [rows, ticks] = await Promise.all([getList(), getTicks()]);
+                if (!alive) return;
+                // OM49 — one list, so one count. It used to add up three sources
+                // and could disagree with the page it was counting.
+                //
+                // OM46 — something already ticked is in the basket, so it is not
+                // "still to buy": the badge counted them until the trip was
+                // finished, which is exactly when the number stopped mattering.
+                setToBuy(rows.filter((r) => !ticks.keys.has(extraTickKey(r.id))).length);
+            } catch (e) {
+                console.error('useToBuyCount:', e);
+                // Unset, not stale: after a finished trip the old count is wrong.
+                if (alive) setToBuy(null);
+            }
         })();
         return () => { alive = false; };
     }, [user, pathname, nonce]);

@@ -20,6 +20,7 @@ import { currentSeason, isInSeason, SEASON_LABEL, type Season } from "@/lib/seas
 import { DIETS, DIET_LABEL, dietMatches, type Diet } from "@/lib/diet";  // OM30
 import { useAiEnabled } from "@/lib/useAiEnabled";  // OM35(c)
 import { useAuth } from "@/lib/AuthContext";
+import { useToast } from "./Toast";  // OM59
 
 import { CATEGORIES } from "@/lib/constants";
 import {
@@ -35,10 +36,14 @@ import { buildCookbookPDF } from "@/lib/exportPDF";  // OM26
 function MenuContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const { toast } = useToast();  // OM59
 
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    // OM59 — was `string | null` holding the raw `error.message` (rendered
+    // straight into MasonryGrid). Now just "did the last fetch fail" — the
+    // real error stays in console.error inside fetchRecipes.
+    const [error, setError] = useState<boolean>(false);
 
     // OM9 — collections
     const [collections, setCollections] = useState<Collection[]>([]);
@@ -152,15 +157,17 @@ function MenuContent() {
     // Fetch Recipes
     const fetchRecipes = async () => {
         setLoading(true);
-        setError(null);
+        setError(false);
         const { data, error } = await supabase
             .from("recipes")
             .select("*")
             .order("created_at", { ascending: false });
 
         if (error) {
+            // OM59 — the raw Postgres error stays in the console; MasonryGrid
+            // only gets told whether it failed, not what the message said.
             console.error("Error fetching recipes:", error);
-            setError(error.message);
+            setError(true);
         } else {
             setRecipes(data as Recipe[]);
         }
@@ -232,7 +239,11 @@ function MenuContent() {
         const payload = user ? { ...newRecipe, user_id: user.id } : newRecipe;
         const { data, error } = await supabase.from("recipes").insert([payload]).select();
         if (error) {
-            alert("Error adding recipe! " + error.message);
+            // OM59 — was a browser alert box: "Error adding recipe! " + error.message.
+            // AddRecipeModal's handleSubmit catches this throw and shows a
+            // persistent inline error next to Save Dish; the form is left
+            // open with what was typed, so nothing is lost.
+            console.error("Error adding recipe:", error);
             throw error;
         }
         if (data) {
@@ -246,8 +257,13 @@ function MenuContent() {
     const handleUpdateRecipe = async (updated: Recipe) => {
         const { error } = await supabase.from("recipes").update(updated).eq("id", updated.id);
         if (error) {
-            alert("Error updating recipe! " + error.message);
-            return;
+            // OM59 — was a browser alert box: "Error updating recipe! " + error.message
+            // and a silent `return` — which let EditRecipeModal call
+            // onClose() right after, closing on a failed save. Throwing
+            // instead lets the modal catch it, stay open, and show a
+            // persistent inline error (matches handleAddRecipe above).
+            console.error("Error updating recipe:", error);
+            throw error;
         }
 
         setRecipes((prev) => prev.map(r => r.id === updated.id ? updated : r));
@@ -270,7 +286,10 @@ function MenuContent() {
         // caller sees zero existing titles and would insert the whole initial
         // menu again as orphan rows. Refuse rather than seed blind.
         if (!user) {
-            alert("Please sign in first — your menu is private to your household.");
+            // OM59 — was a browser alert box. Nothing was attempted yet (this guard
+            // runs before any write), so a timed toast is enough — there is
+            // no state to lose track of.
+            toast("Please sign in first — your menu is private to your household.", { variant: "warning" });
             return;
         }
         if (!confirm("This will upload all initial recipes. Duplicates will be skipped. Continue?")) return;
@@ -299,7 +318,9 @@ function MenuContent() {
             }
         }
 
-        alert(`Finished! Added ${count} new recipes. Skipped ${skipCount} already in menu.`);
+        // OM59 — was a browser alert box. Non-destructive summary of a completed
+        // background action — a timed toast is enough.
+        toast(`Finished! Added ${count} new recipe${count === 1 ? "" : "s"}. Skipped ${skipCount} already in menu.`, { variant: "success" });
         fetchRecipes();
     };
 
@@ -312,11 +333,22 @@ function MenuContent() {
         const { error, count } = await supabase.from("recipes").delete({ count: 'exact' }).neq("id", "00000000-0000-0000-0000-000000000000");
 
         if (error) {
-            alert(`Error resetting: ${error.message}. Check your Supabase Policies!`);
+            // OM59 — was a browser alert box: `Error resetting: ${error.message}. Check
+            // your Supabase Policies!`). This clears every recipe, so a
+            // failure gets a persistent toast, not a timed one — the raw
+            // Postgres error stays in the console.
+            console.error("Error resetting:", error);
+            toast("Couldn't clear the menu. Nothing was deleted — try again.", { variant: "error", persistent: true });
         } else if (count !== null && count === 0 && recipes.length > 0) {
-            alert("Warning: 0 recipes were deleted. This usually means Supabase is blocking the DELETE action. Please run the SQL command to enable 'delete' policies.");
+            // OM59 — was a browser alert box: "Warning: 0 recipes were deleted...". Same
+            // destructive-path reasoning: persistent, not timed.
+            console.error("Reset deleted 0 rows with", recipes.length, "recipes present — likely an RLS delete policy blocking it.");
+            toast("0 recipes were deleted — this usually means a permissions rule is blocking it.", { variant: "warning", persistent: true });
         } else {
-            alert("Menu cleared! You can now reload the initial data.");
+            // OM59 — was a browser alert box: "Menu cleared!...". Confirms a destructive
+            // action already completed rather than warning about one that's
+            // about to, so a timed success toast is fine here.
+            toast("Menu cleared! You can now reload the initial data.", { variant: "success" });
             setRecipes([]);
         }
         setLoading(false);
@@ -413,7 +445,9 @@ function MenuContent() {
                     <button
                         onClick={async () => {
                             await apiFetch('/api/recipes/embed', { method: 'POST' });
-                            alert('Embeddings synced!');
+                            // OM59 — was a browser alert box: 'Embeddings synced!'. Admin-only
+                            // background action; timed toast.
+                            toast('Embeddings synced!', { variant: "success" });
                         }}
                         className="mt-2 text-xs px-3 py-1 border border-stone-300 rounded-full text-stone-500 hover:bg-stone-100"
                     >
@@ -492,7 +526,8 @@ function MenuContent() {
                     const scoped = recipes.filter((r) => ids.has(r.id));
                     const name = collections.find((c) => c.id === collectionId)?.name || "Cookbook";
                     if (scoped.length === 0) {
-                        alert("This collection has no recipes yet.");
+                        // OM59 — was a browser alert box. Nothing was attempted; timed toast.
+                        toast("This collection has no recipes yet.", { variant: "info" });
                         return;
                     }
                     await buildCookbookPDF(name, scoped);
@@ -512,6 +547,7 @@ function MenuContent() {
                         onSeed={handleSeedData}
                         onEdit={handleOpenEdit}
                         error={error}
+                        onRetryError={fetchRecipes}
                         signedOut={!authLoading && !user}
                         totalCount={recipes.length}
                         onClearFilters={clearFilters}

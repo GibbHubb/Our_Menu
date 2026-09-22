@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, Loader2, Plus, ShoppingCart, Sparkles, Trash2 } from "lucide-react";
 import AppShell from "@/components/AppShell";  // OM43
+import { ErrorState } from "@/components/StateViews";  // OM59
 import {
   addPantryItem,
   importCommonStaples,
@@ -21,6 +22,11 @@ import { announceListChanged, copyLinesToList, shoppingKey } from "@/lib/shoppin
 export default function PantryPage() {
   const [items, setItems] = useState<PantryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // OM59 — getPantryItems() used to swallow a fetch failure and return [],
+  // which looked exactly like an empty pantry. It now throws, and this
+  // tracks the real outcome so a failed load shows a retry instead of
+  // "nothing here yet" — the `018` bug, replicated here before this ticket.
+  const [loadError, setLoadError] = useState(false);
   const [single, setSingle] = useState("");
   const [bulkText, setBulkText] = useState("");
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -41,9 +47,16 @@ export default function PantryPage() {
 
   const refresh = async () => {
     setLoading(true);
-    const data = await getPantryItems();
-    setItems(data);
-    setLoading(false);
+    setLoadError(false);
+    try {
+      const data = await getPantryItems();
+      setItems(data);
+    } catch (e) {
+      console.error("pantry refresh:", e);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { refresh(); }, []);
@@ -239,7 +252,7 @@ export default function PantryPage() {
         {/* OM42 — Max: "there should be a standard pantry with shit that
             everyone has / wants". Offered while the pantry is still thin, and
             it stops nagging once there is a real one. */}
-        {!loading && items.length < 25 && (
+        {!loading && !loadError && items.length < 25 && (
           <div className="bg-stone-900 text-stone-50 rounded-2xl p-5 flex flex-wrap items-center gap-4">
             <div className="flex-1 min-w-[220px]">
               <p className="font-serif text-lg">Start from a standard pantry</p>
@@ -321,6 +334,12 @@ export default function PantryPage() {
             <div className="flex items-center justify-center py-10 text-stone-400">
               <Loader2 className="w-6 h-6 animate-spin" />
             </div>
+          ) : loadError ? (
+            <ErrorState
+              title="Couldn't load the pantry"
+              detail="Check your connection and try again."
+              onRetry={() => void refresh()}
+            />
           ) : items.filter((i) => i.category === section).length === 0 ? (
             <div className="text-center py-8 space-y-3">
               <p className="text-stone-400 italic">Nothing in {PANTRY_SECTIONS.find((x) => x.key === section)?.label} yet.</p>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Category, Recipe } from "@/lib/types";
-import { X, Loader2, Sparkles } from "lucide-react";
+import { X, Loader2, Sparkles, AlertCircle } from "lucide-react";
 import { SEASONS, SEASON_LABEL, type Season } from "@/lib/seasons";
 import { DIETS, DIET_LABEL, type Diet } from "@/lib/diet";  // OM30
 import { ImageUploadButton } from "./AddRecipeModal";  // OM25 — shared uploader
@@ -22,6 +22,10 @@ interface EditRecipeModalProps {
 
 export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, categories }: EditRecipeModalProps) {
     const [loading, setLoading] = useState(false);
+    // OM59 — was a browser alert box: "Error updating recipe! " + error.message, and
+    // before that the modal used to close anyway even on a failed save
+    // (onUpdate never threw). Persistent inline error, matching AddRecipeModal.
+    const [updateError, setUpdateError] = useState<string | null>(null);
     const [formData, setFormData] = useState<Partial<Recipe>>({});
     // OM9 — collections picker
     const [collections, setCollections] = useState<Collection[]>([]);
@@ -61,13 +65,16 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setUpdateError(null);
         try {
             if (recipe) {
                 await onUpdate({ ...recipe, ...formData } as Recipe);
+                setUpdateError(null);
                 onClose();
             }
         } catch (error) {
             console.error(error);
+            setUpdateError("Couldn't save these changes. Nothing was lost — try again.");
         } finally {
             setLoading(false);
         }
@@ -86,7 +93,7 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
             <div className="bg-white text-stone-900 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
                 <div className="p-6 border-b border-stone-100 flex justify-between items-center sticky top-0 bg-white z-10">
                     <h2 className="text-2xl font-serif">Edit Recipe</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-full">
+                    <button onClick={() => { setUpdateError(null); onClose(); }} className="p-2 hover:bg-stone-100 rounded-full">
                         <X className="w-6 h-6" />
                     </button>
                 </div>
@@ -358,6 +365,13 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                             className="w-full p-3 bg-stone-50 rounded-xl border-none focus:ring-2 focus:ring-amber-500 font-sans"
                         />
                     </div>
+
+                    {updateError && (
+                        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            {updateError}
+                        </p>
+                    )}
 
                     <button
                         type="submit"

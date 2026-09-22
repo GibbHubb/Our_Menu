@@ -8,6 +8,7 @@ import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUti
 import { supabase } from "@/lib/supabaseClient";
 import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
 import { copyLinesToList, toCopyLine } from "@/lib/shopping";  // OM49
+import { useToast } from "./Toast";  // OM59
 
 interface Substitution { name: string; note: string; }
 
@@ -24,6 +25,7 @@ interface ShoppingListProps {
 }
 
 export default function ShoppingList({ initialList, scale, setScale, recipeId, checkedMap, recipeName, recipeIngredients, baseServings }: ShoppingListProps) {
+    const { toast } = useToast();  // OM59
     const [items, setItems] = useState<ParsedItem[]>([]);
     const [showCopied, setShowCopied] = useState(false);
     const [checked, setChecked] = useState<Record<string, boolean>>(checkedMap ?? {});
@@ -123,10 +125,16 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
                 .update({ shopping_list_checked: updated })
                 .eq('id', recipeId)
                 .then(({ error }) => {
-                    if (error) console.error('Failed to sync checked state:', error);
+                    // OM59 — was console.error only: the tap registered on
+                    // screen but silently didn't persist, so the tick would
+                    // be gone on the next load with nothing having said so.
+                    if (error) {
+                        console.error('Failed to sync checked state:', error);
+                        toast("Couldn't save that tick — it may not stick around.", { variant: "warning" });
+                    }
                 });
         }
-    }, [checked, recipeId]);
+    }, [checked, recipeId, toast]);
 
     const handleScale = (newScale: number) => {
         if (newScale < 0.5) return;
