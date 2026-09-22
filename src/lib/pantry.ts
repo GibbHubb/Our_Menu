@@ -9,8 +9,6 @@ export interface PantryItem {
   canonical_key: string;
   display_name:  string;
   added_at: string;
-  /** OM40 — "we're low on this"; shows up under Staples on the shopping list. */
-  needed: boolean;
   /** OM42 — kitchen | bathroom | household. Only kitchen counts as cookable. */
   category: PantryCategory;
 }
