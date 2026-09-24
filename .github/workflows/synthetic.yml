@@ -1,0 +1,44 @@
+# OM61 — daily proof the app actually renders, not just that it answers 200.
+#
+# keepalive.yml (the other workflow in this repo) only asserts HTTP 200 from
+# one route on a 3-day cadence — it cannot tell "the app works" from "the app
+# renders an error page with a 200". This is the check that can: it drives
+# four real surfaces in a signed-in browser (scripts/synthetic_check.py) and
+# reads /api/health's BODY, not just its status.
+#
+# Requires a repo secret: SUPABASE_SERVICE_ROLE_KEY — see synthetic_check.py's
+# docstring for what it's used for (minting a magic link, not sending an
+# email). Until that secret is set this job fails at the env-check step
+# with a clear message rather than a cryptic Playwright error.
+#
+# Does not touch keepalive.yml or the Vercel cron in vercel.json — both stay
+# exactly as they are (OM61 AC6).
+
+name: Our_Menu synthetic check
+
+on:
+  schedule:
+    # 07:35 UTC daily — offset from keepalive's 06:20 every-3rd-day so the
+    # two are distinguishable in the Actions log.
+    - cron: '35 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Playwright
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Run the 4-surface synthetic check
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python scripts/synthetic_check.py

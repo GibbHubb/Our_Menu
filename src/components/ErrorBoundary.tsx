@@ -1,6 +1,7 @@
 'use client';
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
+import { reportClientError } from '@/lib/clientErrorReporter';
 
 interface Props {
     children: ReactNode;
@@ -29,6 +30,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
     componentDidCatch(error: Error, info: ErrorInfo) {
         console.error('ErrorBoundary:', error, info.componentStack);
+        // OM61 — the console.error above has no observer on either side (a
+        // Vercel serverless log nobody reads, or nothing at all in the
+        // browser). This is what turns it into a counted row.
+        reportClientError('ErrorBoundary', error, {
+            componentStack: (info.componentStack || '').slice(0, 500),
+        });
     }
 
     render() {

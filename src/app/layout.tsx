@@ -3,6 +3,7 @@ import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import AIChat from "@/components/AIChat";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ClientErrorReporterMount } from "@/components/ClientErrorReporterMount";
 import { ToastProvider } from "@/components/Toast";
 import { AuthProvider } from "@/lib/AuthContext";
 
@@ -67,6 +68,7 @@ export default function RootLayout({
       >
         <AuthProvider>
           <ToastProvider>
+            <ClientErrorReporterMount />
             <ErrorBoundary>{children}</ErrorBoundary>
             <AIChat />
           </ToastProvider>
