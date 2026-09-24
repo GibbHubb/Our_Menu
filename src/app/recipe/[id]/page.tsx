@@ -9,7 +9,6 @@ import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Edit2, Save, MoreHo
 import { logCook, formatLastCooked } from "@/lib/cookLog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import EditRecipeModal from "@/components/EditRecipeModal";
 import ShoppingListComp from "@/components/ShoppingList";
 import IngredientList from "@/components/IngredientList";
@@ -282,10 +281,18 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                 {/* Hero Image */}
                 <div className="aspect-video w-full bg-stone-200 relative">
                     {recipe.image_url ? (
+                        // OM57 — raw <img>, not next/image: same third-party-host rationale as
+                        // RecipeCard.tsx (see OM57.md §7 step 2). This is the true above-the-fold
+                        // hero, so fetchPriority="high" instead of lazy loading; width/height
+                        // mirror the aspect-video box.
                         <img
                             src={recipe.image_url}
                             alt={recipe.title}
                             className="w-full h-full object-cover"
+                            decoding="async"
+                            fetchPriority="high"
+                            width={1280}
+                            height={720}
                         />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center text-stone-400">

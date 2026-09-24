@@ -117,10 +117,17 @@ export default function PublicRecipePage() {
     return (
         <main className="max-w-2xl mx-auto p-4 sm:p-8">
             {recipe.image_url && (
+                // OM57 — raw <img>, not next/image: same third-party-host rationale as
+                // RecipeCard.tsx (see OM57.md §7 step 2). First element on the page, so no
+                // lazy loading; width/height are a representative landscape ratio — the
+                // fixed h-72 + object-cover already reserves the box's height via CSS.
                 <img
                     src={recipe.image_url}
                     alt={recipe.title}
                     className="w-full h-72 object-cover rounded-2xl mb-6"
+                    decoding="async"
+                    width={1200}
+                    height={450}
                 />
             )}
             <h1 className="font-serif text-4xl text-stone-900 mb-2">{recipe.title}</h1>

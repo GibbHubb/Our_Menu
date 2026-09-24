@@ -53,12 +53,19 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                 {/* Image Area */}
                 <div className="aspect-[4/3] bg-stone-100 relative overflow-hidden">
                     {recipe.image_url && !imgError ? (
+                        // OM57 — raw <img>, not next/image: 0 of 96 recipes are Supabase-hosted,
+                        // all are third-party across ~29 hosts (one already known to block
+                        // Vercel's server-side fetches) — see OM57.md §7 step 2 for the decision.
+                        // width/height mirror the aspect-[4/3] box above.
                         <img
                             src={recipe.image_url}
                             alt={recipe.title}
                             onError={() => setImgError(true)}
                             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                             loading="lazy"
+                            decoding="async"
+                            width={800}
+                            height={600}
                         />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-stone-100 to-stone-200">

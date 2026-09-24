@@ -316,10 +316,17 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                         </div>
                         <p className="text-xs text-stone-400 mt-1">Paste an image address, or upload one (auto-resized, scoped to your account).</p>
                         {formData.image_url && (
+                            // OM57 — raw <img>, not next/image: renders the URL the user just
+                            // typed/uploaded, not a page-load fetch (out of scope per OM57.md
+                            // §4). width/height match the fixed h-24 w-24 preview box.
                             <img
                                 src={formData.image_url}
                                 alt="Preview"
                                 className="mt-2 h-24 w-24 object-cover rounded border border-stone-200"
+                                loading="lazy"
+                                decoding="async"
+                                width={96}
+                                height={96}
                             />
                         )}
                     </div>

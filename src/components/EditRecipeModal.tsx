@@ -171,7 +171,17 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                         </div>
                         {formData.image_url && (
                             <div className="h-40 w-full rounded-xl overflow-hidden bg-stone-100 mt-2 relative">
-                                <img src={formData.image_url} className="w-full h-full object-cover" alt="Preview" />
+                                {/* OM57 — raw <img>, not next/image: same "user's own preview,
+                                    not a page-load fetch" rationale as AddRecipeModal.tsx. */}
+                                <img
+                                    src={formData.image_url}
+                                    className="w-full h-full object-cover"
+                                    alt="Preview"
+                                    loading="lazy"
+                                    decoding="async"
+                                    width={640}
+                                    height={160}
+                                />
                             </div>
                         )}
                     </div>
