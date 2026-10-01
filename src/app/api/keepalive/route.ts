@@ -48,11 +48,13 @@ export async function GET(req: NextRequest) {
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
 
-    // `head: true` sends the query without transferring rows. RLS decides what
-    // the count covers; a zero count is still a successful round trip.
-    const { count, error } = await supabase
-        .from('recipes')
-        .select('id', { count: 'exact', head: true });
+    // OM65: NOT `{ count: 'exact', head: true }`. A HEAD response has no body to
+    // carry an error, so when the table is missing PostgREST's 404 reaches
+    // supabase-js as `{ error: null, status: 204 }` and the probe reports green
+    // for a dropped table. `select('id').limit(1)` has a body on every response
+    // and surfaces PGRST205 (same probe as /api/health). RLS may still return
+    // zero rows; that is a successful round trip.
+    const { data, error } = await supabase.from('recipes').select('id').limit(1);
 
     if (error) {
         console.error('Keepalive query failed:', error.message);
@@ -64,7 +66,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
         ok: true,
-        visibleRecipes: count ?? 0,
+        reachable: true,
+        sampleRows: data?.length ?? 0,
         at: new Date().toISOString(),
     });
 }

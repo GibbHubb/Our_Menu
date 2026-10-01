@@ -9,6 +9,7 @@
     "extract-list": "tsx scripts/extract_ingredients.ts",
     "test:import": "tsx scripts/test_recipe_import.ts",
     "test:canonicalise": "tsx scripts/test_canonicalise.ts",
+    "test:keepalive": "tsx scripts/test_keepalive_probe.ts",
     "lint": "eslint"
   },
   "dependencies": {
