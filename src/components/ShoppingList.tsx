@@ -270,8 +270,10 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, r
             {/* List */}
             <div className="space-y-2">
                 {items.map((item) => {
+                    // The unit was dropped here: "1 tbsp olive oil" read "1 olive oil" and
+                    // "200 g spaghetti" read "200 spaghetti" (found during OM58's keyboard pass).
                     const displayQty = item.quantity !== null
-                        ? formatQuantity(item.quantity * scale)
+                        ? `${formatQuantity(item.quantity * scale)}${item.unit ? ` ${item.unit}` : ''}`
                         : null;
                     const itemSubs = subs[item.id];
                     const itemSubError = subsError[item.id];
