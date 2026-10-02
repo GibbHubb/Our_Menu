@@ -34,16 +34,13 @@ async function checkDb(url: string, anonKey: string): Promise<{ status: CheckSta
     const supabase = createClient(url, anonKey, {
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
-    // Deliberately NOT `{ count: 'exact', head: true }` like keepalive/route.ts
-    // uses: proving this route in step 1 (OM61) found that combination is
-    // blind. A HEAD request has no body, and when the target table doesn't
-    // exist PostgREST's 404 comes back to supabase-js as `{ error: null,
-    // status: 204 }` — indistinguishable from "table exists, zero rows".
-    // keepalive inherits the same blind spot; that is a follow-up (filed
-    // separately at complete time), not fixed here, because it needs its own
-    // step-1-style proof before editing
-    // a check that has run in production since OM36. `select('id').limit(1)`
-    // has a body on every response and correctly surfaces PGRST205.
+    // Deliberately NOT `{ count: 'exact', head: true }`: proving this route in
+    // step 1 (OM61) found that combination is blind. A HEAD request has no
+    // body, and when the target table doesn't exist PostgREST's 404 comes back
+    // to supabase-js as `{ error: null, status: 204 }` — indistinguishable from
+    // "table exists, zero rows". keepalive/route.ts had the same blind spot
+    // until OM65 moved it to this probe (scripts/probe_keepalive.ts proves it).
+    // `select('id').limit(1)` has a body on every response and surfaces PGRST205.
     const { error } = await supabase.from('recipes').select('id').limit(1);
     if (error) return { status: 'down', detail: error.message };
     return { status: 'up' };
