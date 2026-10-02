@@ -114,7 +114,7 @@ function LoginInner() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-100 text-emerald-700">
             <CheckCircle2 className="w-6 h-6" />
           </div>
-          <h1 className="font-serif text-2xl text-stone-900">You're signed in</h1>
+          <h1 className="font-serif text-2xl text-stone-900">You&apos;re signed in</h1>
           <p className="text-stone-600 text-sm">
             Logged in as <span className="font-medium text-stone-900">{user.email}</span>
           </p>
@@ -181,7 +181,7 @@ function LoginInner() {
           <form onSubmit={handlePassword} className="space-y-4">
             <p className="text-stone-600 text-sm leading-relaxed">
               Enter your email and password. Your phone can remember them, so next
-              time it's one tap.
+              time it&apos;s one tap.
             </p>
             {emailField}
             <div>
@@ -237,8 +237,8 @@ function LoginInner() {
         ) : (
           <form onSubmit={handleSend} className="space-y-4">
             <p className="text-stone-600 text-sm leading-relaxed">
-              We'll email you a link — no password to remember. Use the same email next time
-              and you'll see the same recipes.
+              We&apos;ll email you a link — no password to remember. Use the same email next time
+              and you&apos;ll see the same recipes.
             </p>
             {emailField}
             {errorBox}

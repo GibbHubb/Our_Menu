@@ -57,6 +57,7 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                         // all are third-party across ~29 hosts (one already known to block
                         // Vercel's server-side fetches) — see OM57.md §7 step 2 for the decision.
                         // width/height mirror the aspect-[4/3] box above.
+                        // eslint-disable-next-line @next/next/no-img-element -- OM57: raw <img> by decision, rationale above
                         <img
                             src={recipe.image_url}
                             alt={recipe.title}

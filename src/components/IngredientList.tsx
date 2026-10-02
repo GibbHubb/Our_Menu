@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { Copy, Check } from "lucide-react";
 import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
 import { useUnitSystem } from "@/lib/useUnitSystem";  // OM27
@@ -13,20 +13,19 @@ interface IngredientListProps {
 }
 
 export default function IngredientList({ ingredients, scale, setScale }: IngredientListProps) {
-    const [items, setItems] = useState<ParsedItem[]>([]);
+    // Derived from the prop rather than mirrored into state by an effect
+    // (OM62 lint: set-state-in-effect rendered one frame of the old lines).
+    const items = useMemo<ParsedItem[]>(() => {
+        if (!ingredients) return [];
+        return ingredients
+            .split('\n')
+            .filter(line => line.trim().length > 0)
+            .map((line, idx) => parseIngredientLine(line, idx));
+    }, [ingredients]);
     const [showCopied, setShowCopied] = useState(false);
     // OM27 — display unit system (metric/us); convert each line for display
     // but keep the underlying ParsedItem for scaling/copy semantics.
     const [unitSystem] = useUnitSystem();
-
-    useEffect(() => {
-        if (!ingredients) {
-            setItems([]);
-            return;
-        }
-        const lines = ingredients.split('\n').filter(line => line.trim().length > 0);
-        setItems(lines.map((line, idx) => parseIngredientLine(line, idx)));
-    }, [ingredients]);
 
     const handleScale = (newScale: number) => {
         if (newScale < 0.5) return;

@@ -319,6 +319,7 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                             // OM57 — raw <img>, not next/image: renders the URL the user just
                             // typed/uploaded, not a page-load fetch (out of scope per OM57.md
                             // §4). width/height match the fixed h-24 w-24 preview box.
+                            // eslint-disable-next-line @next/next/no-img-element -- OM57: raw <img> by decision, rationale above
                             <img
                                 src={formData.image_url}
                                 alt="Preview"

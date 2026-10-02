@@ -22,7 +22,6 @@ export async function buildMealPlanPDF(plan: MealPlan, recipes: Recipe[]) {
     const PAGE_W = 595;
     const PAGE_H = 842;
     const MARGIN = 50;
-    const LINE_H = 16;
     const MAX_Y = PAGE_H - MARGIN;
 
     let page = doc.addPage([PAGE_W, PAGE_H]);

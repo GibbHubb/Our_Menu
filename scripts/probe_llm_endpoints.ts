@@ -2,7 +2,7 @@
 
 const BASE_URL = "http://192.168.2.182:8003";
 
-async function testEndpoint(path: string, method: string = "GET", body?: any) {
+async function testEndpoint(path: string, method: string = "GET", body?: unknown) {
     const url = `${BASE_URL}${path}`;
     console.log(`Testing ${method} ${url}...`);
     try {
@@ -23,8 +23,8 @@ async function testEndpoint(path: string, method: string = "GET", body?: any) {
             console.log("Response peek:", text.slice(0, 200));
             return true;
         }
-    } catch (e: any) {
-        console.log(`Error: ${e.message}`);
+    } catch (e) {
+        console.log(`Error: ${e instanceof Error ? e.message : String(e)}`);
     }
     return false;
 }

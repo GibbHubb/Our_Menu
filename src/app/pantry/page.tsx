@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Loader2, Plus, ShoppingCart, Sparkles, Trash2 } from "lucide-react";
+import { Check, Loader2, Plus, ShoppingCart, Sparkles, Trash2 } from "lucide-react";
 import AppShell from "@/components/AppShell";  // OM43
 import { ErrorState } from "@/components/StateViews";  // OM59
 import {
   addPantryItem,
   importCommonStaples,
-  setPantryCategory,
   PANTRY_SECTIONS,
   type PantryCategory,
   bulkAddPantryItems,

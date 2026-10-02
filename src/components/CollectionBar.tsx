@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Folder, Plus, X, Pencil, FileDown } from "lucide-react";
+import { Folder, Plus, X, FileDown } from "lucide-react";
 import type { Collection } from "@/lib/collections";
 
 interface Props {

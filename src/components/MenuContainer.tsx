@@ -7,12 +7,12 @@ import { apiFetch } from "@/lib/apiFetch";
 import AppShell from "./AppShell";  // OM43
 import { Search } from "lucide-react";
 import MasonryGrid from "./MasonryGrid";
-import AddRecipeModal from "./AddRecipeModal";
+import AddRecipeModal, { type AddRecipePayload } from "./AddRecipeModal";
 import EditRecipeModal from "./EditRecipeModal";
 import DecisionMaker from "./DecisionMaker";
 import ChatAgent from "./ChatAgent";
 import CollectionBar from "./CollectionBar";
-import { Plus, Wand2, Database, Sparkles, X } from "lucide-react";
+import { Plus, Wand2, Sparkles, X } from "lucide-react";
 import { INITIAL_RECIPES } from "@/lib/initialData";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -124,12 +124,10 @@ function MenuContent() {
     // Modals
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isDecisionOpen, setIsDecisionOpen] = useState(false);
-    const [isDetailOpen, setIsDetailOpen] = useState(false);
 
     // Editing
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
-    const [detailRecipe, setDetailRecipe] = useState<Recipe | null>(null);
 
     // Semantic search handler (OM1)
     const handleSemanticSearch = async (e: React.FormEvent) => {
@@ -233,7 +231,7 @@ function MenuContent() {
     };
 
     // Add Recipe Handler
-    const handleAddRecipe = async (newRecipe: any) => {
+    const handleAddRecipe = async (newRecipe: AddRecipePayload) => {
         // OM14 Phase A — stamp user_id when authenticated; RLS still allows
         // NULL inserts for the legacy anonymous flow.
         const payload = user ? { ...newRecipe, user_id: user.id } : newRecipe;
@@ -273,11 +271,6 @@ function MenuContent() {
     const handleOpenEdit = (recipe: Recipe) => {
         setEditingRecipe(recipe);
         setIsEditOpen(true);
-    };
-
-    const handleOpenDetail = (recipe: Recipe) => {
-        setDetailRecipe(recipe);
-        setIsDetailOpen(true);
     };
 
     // Seed Data Handler (Dev/Setup usage)
@@ -322,36 +315,6 @@ function MenuContent() {
         // background action — a timed toast is enough.
         toast(`Finished! Added ${count} new recipe${count === 1 ? "" : "s"}. Skipped ${skipCount} already in menu.`, { variant: "success" });
         fetchRecipes();
-    };
-
-    // Reset Data Handler
-    const handleResetData = async () => {
-        if (!confirm("⚠️ WARNING: This will DELETE ALL recipes from the database. This cannot be undone. Are you sure?")) return;
-
-        setLoading(true);
-        // "select" option is needed to return the count of deleted rows
-        const { error, count } = await supabase.from("recipes").delete({ count: 'exact' }).neq("id", "00000000-0000-0000-0000-000000000000");
-
-        if (error) {
-            // OM59 — was a browser alert box: `Error resetting: ${error.message}. Check
-            // your Supabase Policies!`). This clears every recipe, so a
-            // failure gets a persistent toast, not a timed one — the raw
-            // Postgres error stays in the console.
-            console.error("Error resetting:", error);
-            toast("Couldn't clear the menu. Nothing was deleted — try again.", { variant: "error", persistent: true });
-        } else if (count !== null && count === 0 && recipes.length > 0) {
-            // OM59 — was a browser alert box: "Warning: 0 recipes were deleted...". Same
-            // destructive-path reasoning: persistent, not timed.
-            console.error("Reset deleted 0 rows with", recipes.length, "recipes present — likely an RLS delete policy blocking it.");
-            toast("0 recipes were deleted — this usually means a permissions rule is blocking it.", { variant: "warning", persistent: true });
-        } else {
-            // OM59 — was a browser alert box: "Menu cleared!...". Confirms a destructive
-            // action already completed rather than warning about one that's
-            // about to, so a timed success toast is fine here.
-            toast("Menu cleared! You can now reload the initial data.", { variant: "success" });
-            setRecipes([]);
-        }
-        setLoading(false);
     };
 
     return (

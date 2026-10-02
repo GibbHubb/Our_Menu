@@ -1,5 +1,5 @@
-import { Recipe } from "@/lib/types";
-import { X, Sparkles, RefreshCw } from "lucide-react";
+import { Recipe, type Category } from "@/lib/types";
+import { Sparkles, RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
 import RecipeCard from "./RecipeCard";
 // OM28 — pantry + season filters reuse the existing helpers; no new schema.
@@ -28,7 +28,7 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
     const pickRandom = () => {
         let candidates = selectedCategory === "All"
             ? recipes
-            : recipes.filter(r => r.category && r.category.includes(selectedCategory as any));
+            : recipes.filter(r => r.category && r.category.includes(selectedCategory as Category));
 
         // OM28 — apply the surprise-me filter stack.
         if (seasonOnly) {
@@ -61,9 +61,11 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
 
     useEffect(() => {
         if (isOpen && recipes.length > 0) {
+            // Opening the picker IS the spin; it reads the filters as they are now.
             pickRandom();
         }
-    }, [isOpen]); // Keep simple dependency to avoid infinite loops if we added selectedCategory here
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately open-only: re-running on a filter or recipe change would re-spin under the user
+    }, [isOpen]);
 
     if (!isOpen) return null;
 

@@ -104,8 +104,16 @@ scripts/
 npm run extract-list   # Extract & consolidate ingredients from all recipes
 npm run dev            # Start development server
 npm run build          # Production build
-npm run lint           # ESLint
+npm run lint           # ESLint, warnings fail
+npm run typecheck      # tsc --noEmit
+npm test               # unit suite (offline, vitest)
 ```
+
+### Checks that run on every push
+
+`.github/workflows/ci.yml` runs `npm ci` → `typecheck` → `lint` → `test` → `build` on every push and PR,
+cheapest first. Run the same four locally before pushing; CI uses the identical commands.
+It needs no secrets and does not deploy: Vercel still builds `main` itself.
 
 ## Git Workflow
 

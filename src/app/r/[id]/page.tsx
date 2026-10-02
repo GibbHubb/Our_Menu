@@ -121,6 +121,7 @@ export default function PublicRecipePage() {
                 // RecipeCard.tsx (see OM57.md §7 step 2). First element on the page, so no
                 // lazy loading; width/height are a representative landscape ratio — the
                 // fixed h-72 + object-cover already reserves the box's height via CSS.
+                // eslint-disable-next-line @next/next/no-img-element -- OM57: raw <img> by decision, rationale above
                 <img
                     src={recipe.image_url}
                     alt={recipe.title}

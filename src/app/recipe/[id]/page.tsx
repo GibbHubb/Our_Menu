@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { apiFetch } from "@/lib/apiFetch";
 import { Recipe } from "@/lib/types";
 import { CATEGORIES } from "@/lib/constants";
-import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Edit2, Save, MoreHorizontal, Pencil, Copy, Check, Sparkles, Loader2, AlertTriangle, AlertCircle, X, ChefHat } from "lucide-react";
+import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Pencil, Sparkles, Loader2, AlertTriangle, AlertCircle, X, ChefHat } from "lucide-react";
 import { logCook, formatLastCooked } from "@/lib/cookLog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,7 +21,6 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
 
     const [recipe, setRecipe] = useState<Recipe | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     // OM59 — was two browser alert boxes: "Failed to save! Error: ${error.message}…
     // Tip: Run 'repair_database.sql'" and a permission-denied variant with the
     // same instruction. Neither is actionable by anyone using this app, and a
@@ -80,8 +79,8 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                 .single();
 
             if (error) {
+                // The "Recipe Not Found" view below renders off `!recipe`.
                 console.error(error);
-                setError("Recipe not found");
             } else {
                 setRecipe(data as Recipe);
                 setNotes(data.notes || "");
@@ -285,6 +284,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                         // RecipeCard.tsx (see OM57.md §7 step 2). This is the true above-the-fold
                         // hero, so fetchPriority="high" instead of lazy loading; width/height
                         // mirror the aspect-video box.
+                        // eslint-disable-next-line @next/next/no-img-element -- OM57: raw <img> by decision, rationale above
                         <img
                             src={recipe.image_url}
                             alt={recipe.title}
@@ -354,7 +354,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                                         Extract Recipe
                                     </h3>
                                     <p className="text-sm text-amber-900/80 mt-1">
-                                        This recipe doesn't have ingredients, instructions or a shopping list yet.
+                                        This recipe doesn&apos;t have ingredients, instructions or a shopping list yet.
                                         Pull them automatically from the source page.
                                     </p>
                                 </div>
@@ -392,7 +392,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                             {showPasteFallback && (
                                 <div className="rounded-xl border border-stone-200 bg-white p-4 space-y-3">
                                     <p className="text-sm text-stone-600">
-                                        No structured data found on this page. Paste the recipe text below and we'll save it as ingredients.
+                                        No structured data found on this page. Paste the recipe text below and we&apos;ll save it as ingredients.
                                     </p>
                                     <textarea
                                         value={pasteText}
@@ -483,7 +483,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                         ) : (
                             <div className="mt-2">
                                 {shoppingList ? (
-                                    <ShoppingListComp initialList={shoppingList} scale={scale} setScale={setScale} recipeId={recipe?.id} checkedMap={recipe?.shopping_list_checked} recipeName={recipe?.title} recipeIngredients={recipe?.ingredients} baseServings={recipe?.servings} />
+                                    <ShoppingListComp initialList={shoppingList} scale={scale} setScale={setScale} recipeId={recipe?.id} recipeName={recipe?.title} recipeIngredients={recipe?.ingredients} baseServings={recipe?.servings} />
                                 ) : (
                                     <p className="text-stone-400 italic">No items in shopping list.</p>
                                 )}
@@ -526,7 +526,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-xl font-serif font-bold text-amber-900 flex items-center gap-2">
                                 <StickyNote className="w-5 h-5 text-amber-600" />
-                                Chef's Notes
+                                Chef&apos;s Notes
                             </h3>
                             {!isEditingNotes ? (
                                 <button

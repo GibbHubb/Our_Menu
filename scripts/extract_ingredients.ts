@@ -5,7 +5,6 @@ import path from 'path';
 import {
     fetchAndParseRecipe,
     ingredientsToShoppingList,
-    instructionsToText,
 } from '../src/lib/recipeExtractor';
 
 // --- Environment Variable Loading ---
@@ -43,15 +42,6 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-// --- Types ---
-
-interface Recipe {
-    id: string;
-    title: string;
-    link: string;
-    shopping_list: string | null;
-}
 
 // --- Main Logic ---
 // Extraction lifted to src/lib/recipeExtractor.ts so the API route + this
@@ -98,7 +88,7 @@ ${textContent}
                     console.log(`Using detected model: ${modelName}`);
                 }
             }
-        } catch (e) {
+        } catch {
             console.warn("Could not auto-detect model, using default.");
         }
 
@@ -165,7 +155,9 @@ async function _legacyFetchAndParseRecipe(url: string, title: string): Promise<{
                 const jsonContent = match[1];
                 const data = JSON.parse(jsonContent);
 
-                const findRecipe = (obj: any): any => {
+                // JSON-LD is untyped by nature; walk it as `unknown`-shaped records.
+                type JsonObj = { [k: string]: unknown };
+                const findRecipe = (obj: unknown): JsonObj | null => {
                     if (!obj) return null;
                     if (Array.isArray(obj)) {
                         for (const item of obj) {
@@ -173,10 +165,11 @@ async function _legacyFetchAndParseRecipe(url: string, title: string): Promise<{
                             if (found) return found;
                         }
                     } else if (typeof obj === 'object') {
-                        if (obj['@type'] === 'Recipe' || (Array.isArray(obj['@type']) && obj['@type'].includes('Recipe'))) {
-                            return obj;
+                        const o = obj as JsonObj;
+                        if (o['@type'] === 'Recipe' || (Array.isArray(o['@type']) && o['@type'].includes('Recipe'))) {
+                            return o;
                         }
-                        if (obj['@graph']) return findRecipe(obj['@graph']);
+                        if (o['@graph']) return findRecipe(o['@graph']);
                     }
                     return null;
                 };
@@ -188,7 +181,7 @@ async function _legacyFetchAndParseRecipe(url: string, title: string): Promise<{
                     if (typeof ingredients === 'string') ingredients = [ingredients];
                     if (Array.isArray(ingredients)) {
                         console.log("Found JSON-LD ingredients!");
-                        extractedIngredients = ingredients.map((i: any) => i.toString().trim());
+                        extractedIngredients = ingredients.map((i: unknown) => String(i).trim());
                         break; // Stop after finding first valid recipe
                     }
                 }

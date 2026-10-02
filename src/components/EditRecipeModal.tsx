@@ -173,6 +173,7 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                             <div className="h-40 w-full rounded-xl overflow-hidden bg-stone-100 mt-2 relative">
                                 {/* OM57 — raw <img>, not next/image: same "user's own preview,
                                     not a page-load fetch" rationale as AddRecipeModal.tsx. */}
+                                {/* eslint-disable-next-line @next/next/no-img-element -- OM57: raw <img> by decision, rationale above */}
                                 <img
                                     src={formData.image_url}
                                     className="w-full h-full object-cover"

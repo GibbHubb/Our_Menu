@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -13,8 +15,7 @@
     "extract-list": "tsx scripts/extract_ingredients.ts",
     "test:import": "tsx scripts/test_recipe_import.ts",
     "test:canonicalise": "tsx scripts/test_canonicalise.ts",
-    "probe:keepalive": "tsx scripts/probe_keepalive.ts",
-    "lint": "eslint"
+    "probe:keepalive": "tsx scripts/probe_keepalive.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",

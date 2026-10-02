@@ -1,0 +1,59 @@
+# OM62 — the gate in front of Vercel.
+#
+# Vercel builds `main` on every push, so before this a type error, a lint
+# error or a failing test was found by the production build (after the push)
+# or not at all. This runs the same four commands a developer runs locally,
+# cheapest first, so the common failure is reported in under a minute rather
+# than after a full Next build.
+#
+# It gates and reports; it does not deploy. Vercel's Git integration stays the
+# deploy mechanism.
+#
+# ⚠️ No secrets, on purpose. `next build` succeeds on the placeholder values in
+# src/lib/supabaseClient.ts, so this job never needs a Supabase key. Do not add
+# one: the project is shared with the `cortana` and `poly` schemas, and a key
+# in CI would be able to read them for no benefit.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Match the Vercel project's Node version (Project Settings → General).
+          node-version: 22
+          cache: npm
+
+      - name: Install (lockfile is the contract)
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint (warnings fail too)
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'

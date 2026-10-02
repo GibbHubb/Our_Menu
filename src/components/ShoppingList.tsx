@@ -5,10 +5,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Check, Copy, HelpCircle, Loader2, ShoppingCart, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
-import { supabase } from "@/lib/supabaseClient";
 import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
 import { copyLinesToList, toCopyLine } from "@/lib/shopping";  // OM49
-import { useToast } from "./Toast";  // OM59
 
 interface Substitution { name: string; note: string; }
 
@@ -17,18 +15,15 @@ interface ShoppingListProps {
     scale: number;
     setScale: (s: number) => void;
     recipeId?: string;
-    checkedMap?: Record<string, boolean>;
     recipeName?: string;
     recipeIngredients?: string;
     /** OM42 — the recipe's own yield, so the scale can be shown as servings. */
     baseServings?: number | null;
 }
 
-export default function ShoppingList({ initialList, scale, setScale, recipeId, checkedMap, recipeName, recipeIngredients, baseServings }: ShoppingListProps) {
-    const { toast } = useToast();  // OM59
+export default function ShoppingList({ initialList, scale, setScale, recipeId, recipeName, recipeIngredients, baseServings }: ShoppingListProps) {
     const [items, setItems] = useState<ParsedItem[]>([]);
     const [showCopied, setShowCopied] = useState(false);
-    const [checked, setChecked] = useState<Record<string, boolean>>(checkedMap ?? {});
     // OM8 — substitution state per item id
     const [subs, setSubs] = useState<Record<string, Substitution[]>>({});
     const [subsLoading, setSubsLoading] = useState<string | null>(null);
@@ -75,66 +70,6 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, c
         const parsed: ParsedItem[] = lines.map((line, idx) => parseIngredientLine(line, idx));
         setItems(parsed);
     }, [initialList]);
-
-    // Initialise checked state from prop
-    useEffect(() => {
-        if (checkedMap) setChecked(checkedMap);
-    }, [checkedMap]);
-
-    // OM6 — Supabase Realtime subscription for shared checked state
-    useEffect(() => {
-        if (!recipeId) return;
-
-        const channel = supabase
-            .channel(`shopping-${recipeId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'recipes',
-                    filter: `id=eq.${recipeId}`,
-                },
-                (payload) => {
-                    const newChecked = (payload.new as Record<string, unknown>).shopping_list_checked;
-                    if (newChecked && typeof newChecked === 'object') {
-                        setChecked(newChecked as Record<string, boolean>);
-                    }
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [recipeId]);
-
-    // Normalise key for the checked map (trim + lowercase)
-    const checkedKey = (name: string) => name.trim().toLowerCase();
-
-    const handleToggle = useCallback((item: ParsedItem) => {
-        const key = checkedKey(item.name);
-        const newVal = !checked[key];
-        const updated = { ...checked, [key]: newVal };
-        setChecked(updated);
-
-        // Persist to Supabase (optimistic — local state already updated)
-        if (recipeId) {
-            supabase
-                .from('recipes')
-                .update({ shopping_list_checked: updated })
-                .eq('id', recipeId)
-                .then(({ error }) => {
-                    // OM59 — was console.error only: the tap registered on
-                    // screen but silently didn't persist, so the tick would
-                    // be gone on the next load with nothing having said so.
-                    if (error) {
-                        console.error('Failed to sync checked state:', error);
-                        toast("Couldn't save that tick — it may not stick around.", { variant: "warning" });
-                    }
-                });
-        }
-    }, [checked, recipeId, toast]);
 
     const handleScale = (newScale: number) => {
         if (newScale < 0.5) return;

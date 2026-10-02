@@ -1,10 +1,10 @@
 
 const PROBE_BASE_URL = "http://192.168.2.182:8003";
 
-async function check(name: string, path: string, method: string = "GET", body?: any) {
+async function check(name: string, path: string, method: string = "GET", body?: unknown) {
     try {
         const url = `${PROBE_BASE_URL}${path}`;
-        const opts: any = { method };
+        const opts: RequestInit = { method };
         if (body) {
             opts.headers = { "Content-Type": "application/json" };
             opts.body = JSON.stringify(body);
@@ -18,8 +18,8 @@ async function check(name: string, path: string, method: string = "GET", body?: 
                 console.log(`   Body: ${text.slice(0, 100).replace(/\n/g, ' ')}...`);
             } catch { }
         }
-    } catch (e: any) {
-        console.log(`[${name}] ${method} ${path} -> ERROR: ${e.message}`);
+    } catch (e) {
+        console.log(`[${name}] ${method} ${path} -> ERROR: ${e instanceof Error ? e.message : String(e)}`);
     }
 }
 

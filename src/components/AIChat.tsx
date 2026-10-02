@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { MessageCircle, X, Send, Bot, User } from "lucide-react";
+import { MessageCircle, X, Send, Bot } from "lucide-react";
 import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
 import { useAiEnabled } from "@/lib/useAiEnabled";  // OM35(c)
 
@@ -88,7 +88,7 @@ export default function AIChat() {
                     <div className="bg-stone-900 text-white p-4 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Bot className="w-5 h-5" />
-                            <h3 className="font-bold">Chef's Assistant</h3>
+                            <h3 className="font-bold">Chef&apos;s Assistant</h3>
                         </div>
                         <button
                             onClick={() => setIsOpen(false)}
