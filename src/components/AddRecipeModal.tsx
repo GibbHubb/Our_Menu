@@ -5,6 +5,7 @@ import { SEASONS, SEASON_LABEL, type Season } from "@/lib/seasons";
 import { DIETS, DIET_LABEL, type Diet } from "@/lib/diet";  // OM30
 import { uploadRecipeImage } from "@/lib/recipeImages";  // OM25
 import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
+import Modal from "./Modal";  // OM58
 
 // OM10 — wider payload so URL-imported ingredients/instructions land in the same insert.
 // OM13 — seasons added to the same payload.
@@ -135,11 +136,11 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
     };
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <Modal labelledBy="add-recipe-title" onClose={close} className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl animate-in zoom-in-95 duration-200">
                 <div className="flex items-center justify-between p-4 border-b border-stone-100 sticky top-0 bg-white z-10">
-                    <h2 className="font-serif text-xl text-stone-900">Add New Dish</h2>
-                    <button onClick={close} className="p-2 hover:bg-stone-100 rounded-full transition-colors">
+                    <h2 id="add-recipe-title" className="font-serif text-xl text-stone-900">Add New Dish</h2>
+                    <button type="button" onClick={close} aria-label="Close" className="p-2 hover:bg-stone-100 rounded-full transition-colors">
                         <X className="w-5 h-5 text-stone-500" />
                     </button>
                 </div>
@@ -386,7 +387,7 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                     </div>
                 </form>
             </div>
-        </div>
+        </Modal>
     );
 }
 
