@@ -48,6 +48,14 @@ describe('parseIngredient — the shapes in the file header', () => {
     it('dual units, metric second with a fraction first: "1/2 cup / 120 ml milk"', () => {
         expect(p('1/2 cup / 120 ml milk')).toEqual({ qty: 120, unit: 'ml', family: 'volume', item: 'milk' });
     });
+    it('dual units with a mixed number: "1 1/2 cups / 350 ml flour" is 350 ml of flour', () => {
+        expect(p('1 1/2 cups / 350 ml flour')).toEqual({ qty: 350, unit: 'ml', family: 'volume', item: 'flour' });
+        expect(p('1 1/2 lb / 700g beef')).toEqual({ qty: 700, unit: 'g', family: 'mass', item: 'beef' });
+        expect(p('1 ½ cups / 355 ml milk')).toEqual({ qty: 355, unit: 'ml', family: 'volume', item: 'milk' });
+    });
+    it('dual units with ranges: "2-3 tbsp / 30-45 ml oil" takes the metric upper bound', () => {
+        expect(p('2-3 tbsp / 30-45 ml oil')).toEqual({ qty: 45, unit: 'ml', family: 'volume', item: 'oil' });
+    });
     it('dual units, neither metric, keeps the first half: "4 tbsp / 1/4 cup orange juice"', () => {
         expect(p('4 tbsp / 1/4 cup orange juice')).toEqual({ qty: 4, unit: 'tbsp', family: 'volume', item: 'orange juice' });
     });

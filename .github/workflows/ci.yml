@@ -53,6 +53,9 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Positive controls (every CONTROL case must go red when inverted)
+        run: npm run test:controls
+
       - name: Build
         run: npm run build
         env:

@@ -141,8 +141,13 @@ function preferMetricHalf(text: string): string {
     // that, the slash inside a plain fraction was read as the dual-unit
     // separator: "1/2 tsp cumin" became "1 cumin" (qty 1, no unit) and
     // "1 1/2 cups flour" became "1 1 flour" — on the shopping list as 1 of each.
+    // Either half may be a mixed number ("1 1/2 cups / 350 ml") or a range
+    // ("2-3 tbsp / 30-45 ml"); review of 7612d97 found those left "/ 350 ml"
+    // in the item name.
+    const range = String.raw`(?:\s*(?:-|–|—|to)\s*(?:${NUMBER_TOKEN}))?`;
+    const mixed = String.raw`(?:\s+\d+\s*\/\s*\d+|\s+[¼½¾⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])?`;
     const dual = text.match(
-        new RegExp(String.raw`^\s*((?:${NUMBER_TOKEN})[^/a-zA-Z]*[a-zA-Z][^/]*?)\s*/\s*((?:${NUMBER_TOKEN})\s*[a-zA-Z]+\.?)\s+(.*)$`),
+        new RegExp(String.raw`^\s*((?:${NUMBER_TOKEN})${mixed}${range}\s*[a-zA-Z][^/]*?)\s*/\s*((?:${NUMBER_TOKEN})${mixed}${range}\s*[a-zA-Z]+\.?)\s+(.*)$`),
     );
     if (!dual) return text;
     const [, first, second, rest] = dual;
