@@ -91,7 +91,7 @@ src/
     └── initialData.ts
 scripts/
 ├── extract_ingredients.ts  # Bulk ingredient extractor
-└── test_add_recipe.ts
+└── probe_add_recipe.ts
 ```
 
 ## Recipe Categories

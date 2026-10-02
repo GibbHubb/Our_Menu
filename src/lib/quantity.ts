@@ -122,9 +122,13 @@ function splitNotes(line: string): { text: string; note: string } {
     return { text: text.replace(/\s+/g, " ").trim(), note: note.replace(/\s+/g, " ").trim() };
 }
 
-const NUMBER_TOKEN = String.raw`\d+(?:[.,]\d+)?(?:\s*\/\s*\d+)?|[¼½¾⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]`;
+// OM54 — the vulgar-fraction branch comes FIRST and takes an optional leading
+// whole number, so "1½ cups" is one token. With the digit branch first, "1"
+// matched on its own and the line parsed as qty 1, item "½ cups milk".
+const NUMBER_TOKEN = String.raw`\d*[¼½¾⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]|\d+(?:[.,]\d+)?(?:\s*\/\s*\d+)?`;
+// The mixed-number tail accepts "1 1/2" and, since OM54, "1 ½" with a space.
 const LEADING = new RegExp(
-    String.raw`^\s*((?:${NUMBER_TOKEN})(?:\s+\d+\s*\/\s*\d+)?(?:\s*(?:-|–|—|to)\s*(?:${NUMBER_TOKEN}))?)\s*([a-zA-Z]+\.?)?\s*(.*)$`,
+    String.raw`^\s*((?:${NUMBER_TOKEN})(?:\s+\d+\s*\/\s*\d+|\s+[¼½¾⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])?(?:\s*(?:-|–|—|to)\s*(?:${NUMBER_TOKEN}))?)\s*([a-zA-Z]+\.?)?\s*(.*)$`,
 );
 
 /**
@@ -133,8 +137,12 @@ const LEADING = new RegExp(
  * and what a Dutch supermarket labels.
  */
 function preferMetricHalf(text: string): string {
+    // OM54 — the first half must carry a unit WORD before the slash. Without
+    // that, the slash inside a plain fraction was read as the dual-unit
+    // separator: "1/2 tsp cumin" became "1 cumin" (qty 1, no unit) and
+    // "1 1/2 cups flour" became "1 1 flour" — on the shopping list as 1 of each.
     const dual = text.match(
-        new RegExp(String.raw`^\s*((?:${NUMBER_TOKEN})[^/]*?)\s*/\s*((?:${NUMBER_TOKEN})\s*[a-zA-Z]+\.?)\s+(.*)$`),
+        new RegExp(String.raw`^\s*((?:${NUMBER_TOKEN})[^/a-zA-Z]*[a-zA-Z][^/]*?)\s*/\s*((?:${NUMBER_TOKEN})\s*[a-zA-Z]+\.?)\s+(.*)$`),
     );
     if (!dual) return text;
     const [, first, second, rest] = dual;

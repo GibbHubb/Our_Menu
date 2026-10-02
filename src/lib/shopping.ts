@@ -249,21 +249,17 @@ export interface CopyResult {
  * ⚠️ The unique index in migration 023 is keyed the same way. Change one and
  * you must change the other, or an insert starts failing at the database.
  */
-const mergeKey = (key: string, family: UnitFamily | null, unitHint: string | null) =>
+export const mergeKey = (key: string, family: UnitFamily | null, unitHint: string | null) =>
     `${key}|${family ?? ''}|${family === 'count' ? (unitHint ?? '') : ''}`;
 
 /**
- * Copy ticked lines onto the list, merging by ingredient AND unit family.
+ * Fold an incoming batch together by `mergeKey`, so one recipe listing an
+ * ingredient twice arrives as one line rather than racing itself.
  *
- * Max, 2026-08-27: "merge units and always try to include amounts — so 2 × cans
- * tinned tomatoes + 1 can from another recipe would be 3 × cans of tinned
- * tomatoes." Adding across families is deliberately NOT attempted: 200 g of
- * tomatoes and a tin of tomatoes are two different things to pick up, and a
- * single invented number would send you home without one of them.
+ * OM54 — extracted unchanged from `copyLinesToList` so the merge rule can be
+ * tested without a database. Pure: no I/O.
  */
-export async function copyLinesToList(lines: CopyLine[]): Promise<CopyResult> {
-    // Fold the incoming batch together first, so one recipe listing an
-    // ingredient twice arrives as one line rather than racing itself.
+export function foldCopyLines(lines: CopyLine[]): Map<string, CopyLine> {
     const wanted = new Map<string, CopyLine>();
     for (const line of lines) {
         const item = line.item.trim();
@@ -277,6 +273,21 @@ export async function copyLinesToList(lines: CopyLine[]): Promise<CopyResult> {
             : (prev.qty_base ?? 0) + (line.qty_base ?? 0);
         prev.unit_hint = prev.unit_hint ?? line.unit_hint;
     }
+    return wanted;
+}
+
+/**
+ * Copy ticked lines onto the list, merging by ingredient AND unit family.
+ *
+ * Max, 2026-08-27: "merge units and always try to include amounts — so 2 × cans
+ * tinned tomatoes + 1 can from another recipe would be 3 × cans of tinned
+ * tomatoes." Adding across families is deliberately NOT attempted: 200 g of
+ * tomatoes and a tin of tomatoes are two different things to pick up, and a
+ * single invented number would send you home without one of them.
+ */
+export async function copyLinesToList(lines: CopyLine[]): Promise<CopyResult> {
+    // Fold the incoming batch together first (see foldCopyLines).
+    const wanted = foldCopyLines(lines);
     if (!wanted.size) return { added: 0, merged: 0, failed: 0 };
 
     // OM59 — getList() now throws instead of returning [] on a failed read.

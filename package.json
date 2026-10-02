@@ -6,10 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:controls": "node scripts/run_controls.mjs",
     "extract-list": "tsx scripts/extract_ingredients.ts",
     "test:import": "tsx scripts/test_recipe_import.ts",
     "test:canonicalise": "tsx scripts/test_canonicalise.ts",
-    "test:keepalive": "tsx scripts/test_keepalive_probe.ts",
+    "probe:keepalive": "tsx scripts/probe_keepalive.ts",
     "lint": "eslint"
   },
   "dependencies": {
@@ -30,11 +34,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^3.2.7",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }

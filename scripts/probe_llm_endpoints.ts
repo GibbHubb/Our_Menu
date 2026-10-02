@@ -1,3 +1,4 @@
+// ⚠️ PROBE, NOT A TEST (OM54): this calls the live LLM endpoint on the LAN. Not part of `npm test`.
 
 const BASE_URL = "http://192.168.2.182:8003";
 

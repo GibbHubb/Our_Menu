@@ -1,3 +1,5 @@
+// ⚠️ PROBE, NOT A TEST (OM54): this INSERTS into the live Supabase `recipes` table.
+// It is not part of `npm test`; run it by hand only when you mean to write to the live database.
 
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';

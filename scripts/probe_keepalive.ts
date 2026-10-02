@@ -1,5 +1,6 @@
 // OM65 — the keepalive probe must go red for a missing table.
-// Read-only selects with the anon key. Run: npm run test:keepalive
+// ⚠️ PROBE, NOT A TEST (OM54): read-only selects against LIVE Supabase with the anon key.
+// Not part of `npm test`. Run: npm run probe:keepalive
 import { createClient } from '@supabase/supabase-js';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
