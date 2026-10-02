@@ -39,6 +39,8 @@ export default function AppShell({ toolbar, subnav, children, width = "wide" }: 
 
     return (
         <div className="min-h-screen bg-stone-50 font-sans pb-24 sm:pb-20">
+            {/* OM58 — skip link: invisible until focused, so it adds no height to the header. */}
+            <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-2 focus:rounded-lg focus:bg-stone-900 focus:text-white focus:text-sm">Skip to content</a>
             <header
                 className="sticky top-0 z-40 bg-stone-50/95 backdrop-blur-md border-b border-stone-200 shadow-sm"
                 style={{ paddingTop: "env(safe-area-inset-top)" }}
@@ -135,7 +137,7 @@ export default function AppShell({ toolbar, subnav, children, width = "wide" }: 
                 </div>
             </header>
 
-            <main className={`${inner} mx-auto px-4 py-5 sm:py-6`}>{children}</main>
+            <main id="main" tabIndex={-1} className={`${inner} mx-auto px-4 py-5 sm:py-6 outline-none`}>{children}</main>
 
             <BottomNav />
             <InstallHint />

@@ -138,10 +138,12 @@ export default function AIChat() {
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                                 placeholder="What can I cook with..."
+                                aria-label="Message"
                                 className="flex-1 bg-stone-100 border-none rounded-xl px-4 py-2 text-stone-900 focus:ring-2 focus:ring-amber-500 text-sm"
                                 autoFocus
                             />
                             <button
+                                aria-label="Send"
                                 onClick={handleSend}
                                 disabled={loading || !input.trim()}
                                 className="p-2 bg-amber-500 text-white rounded-xl hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

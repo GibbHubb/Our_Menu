@@ -235,7 +235,7 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, r
                             onChange={(e) => handleScale(parseFloat(e.target.value))}
                             className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400"
                         />
-                        <div className="flex justify-between text-[10px] text-stone-400 font-mono">
+                        <div className="flex justify-between text-[10px] text-stone-500 font-mono">
                             <span>0.5</span>
                             <span>5</span>
                             <span>10</span>
@@ -289,7 +289,18 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, r
                                         : 'bg-white hover:bg-stone-50 border-stone-200'}
                                 `}
                             >
-                                <div className={`
+                                {/* OM58 — the row was a clickable <div>: no keyboard
+                                    user could put anything on the list. The checkbox
+                                    and the line are now one real control; the row
+                                    keeps its mouse target for the padding around it. */}
+                                <button
+                                    type="button"
+                                    role="checkbox"
+                                    aria-checked={selected}
+                                    onClick={(e) => { e.stopPropagation(); toggleSelected(item); }}
+                                    className="flex-1 flex items-start gap-3 text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+                                >
+                                <div aria-hidden="true" className={`
                                     flex-shrink-0 mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors
                                     ${selected
                                         ? 'bg-emerald-600 border-emerald-600 text-white'
@@ -313,12 +324,14 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, r
                                         {item.name}
                                     </span>
                                 </div>
+                                </button>
 
                                 {/* OM8 — "I don't have this" button */}
                                 <button
                                     onClick={(e) => { e.stopPropagation(); fetchSubstitutions(item); }}
                                     disabled={isLoadingSubs}
                                     title="I don't have this — suggest substitutes"
+                                    aria-label={`Suggest substitutes for ${item.name}`}
                                     className="flex-shrink-0 p-1.5 text-stone-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors disabled:opacity-50"
                                 >
                                     {isLoadingSubs ? <Loader2 className="w-4 h-4 animate-spin" /> : <HelpCircle className="w-4 h-4" />}

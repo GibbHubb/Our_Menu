@@ -524,6 +524,7 @@ function MenuContent() {
                     onClick={() => setIsDecisionOpen(true)}
                     className="p-4 bg-white text-amber-600 rounded-full shadow-lg hover:bg-amber-50 transition-transform hover:scale-105 border border-amber-100"
                     title="Pick for us!"
+                    aria-label="Pick a recipe for us"
                 >
                     <Wand2 className="w-6 h-6" />
                 </button>
@@ -532,6 +533,7 @@ function MenuContent() {
                     onClick={() => setIsAddOpen(true)}
                     className="p-4 bg-stone-900 text-white rounded-full shadow-lg hover:bg-stone-800 transition-transform hover:scale-105"
                     title="Add Recipe"
+                    aria-label="Add recipe"
                 >
                     <Plus className="w-6 h-6" />
                 </button>

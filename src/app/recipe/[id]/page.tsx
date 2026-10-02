@@ -244,9 +244,10 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
 
     return (
         <div className="min-h-screen bg-stone-50 font-sans pb-20">
+            <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-2 focus:rounded-lg focus:bg-stone-900 focus:text-white focus:text-sm">Skip to content</a>
             {/* Minimal Header */}
             <div className="bg-white sticky top-0 z-40 border-b border-stone-100 px-4 py-3 flex items-center justify-between shadow-sm">
-                <button onClick={() => router.back()} className="p-2 -ml-2 text-stone-600 hover:bg-stone-100 rounded-full transition-colors">
+                <button onClick={() => router.back()} aria-label="Back" className="p-2 -ml-2 text-stone-600 hover:bg-stone-100 rounded-full transition-colors">
                     <ArrowLeft className="w-6 h-6" />
                 </button>
                 <span className="font-serif font-bold text-stone-900 truncate max-w-[60%]">
@@ -256,11 +257,14 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                     onClick={() => setIsEditModalOpen(true)}
                     className="p-2 text-stone-600 hover:bg-stone-100 rounded-full transition-colors"
                     title="Edit Recipe"
+                    aria-label="Edit recipe"
                 >
                     <Pencil className="w-5 h-5" />
                 </button>
             </div>
 
+            {/* OM58 — the page had no main landmark. */}
+            <main id="main" tabIndex={-1} className="outline-none">
             {saveError && (
                 <div className="max-w-4xl mx-auto px-4 pt-4">
                     <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
@@ -295,7 +299,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                             height={720}
                         />
                     ) : (
-                        <div className="w-full h-full flex items-center justify-center text-stone-400">
+                        <div className="w-full h-full flex items-center justify-center text-stone-600">
                             No Image
                         </div>
                     )}
@@ -329,7 +333,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                     {/* OM42 — cooking history is a footnote, not a headline. It
                         had a full-width card on every recipe; Max: "we don't
                         need the made today on all of them". */}
-                    <div className="flex items-center gap-3 text-xs text-stone-400">
+                    <div className="flex items-center gap-3 text-xs text-stone-500">
                         <ChefHat className="w-3.5 h-3.5" />
                         <span>{formatLastCooked(lastCookedAt ?? undefined) ?? 'Never cooked'}</span>
                         <button
@@ -562,7 +566,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
                                 autoFocus
                             />
                         ) : (
-                            <div className={`prose prose-stone ${!notes && 'italic text-stone-400'}`}>
+                            <div className={`prose prose-stone ${!notes && 'italic text-stone-500'}`}>
                                 {notes ? (
                                     <div className="whitespace-pre-wrap text-stone-800">{notes}</div>
                                 ) : (
@@ -574,6 +578,8 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
 
                 </div>
             </div>
+
+            </main>
 
             <EditRecipeModal
                 isOpen={isEditModalOpen}

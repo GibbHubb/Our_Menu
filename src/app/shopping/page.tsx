@@ -340,7 +340,7 @@ export default function ShoppingPage() {
                             const togo = items.filter((r) => !ticks.has(extraTickKey(r.id))).length;
                             return (
                               <div key={aisle} className="mb-4">
-                                <h3 className="text-[11px] font-bold uppercase tracking-wider text-stone-400 mb-1.5 px-1">
+                                <h3 className="text-[11px] font-bold uppercase tracking-wider text-stone-500 mb-1.5 px-1">
                                     <span className="mr-1.5">{AISLE_EMOJI[aisle]}</span>{AISLE_LABEL[aisle]}
                                     <span className="ml-1.5 font-medium normal-case tracking-normal text-stone-300">
                                         {togo === 0 ? "all in the basket" : togo}
@@ -418,7 +418,8 @@ export default function ShoppingPage() {
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
                         placeholder="Add something else…"
-                        className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-stone-400"
+                        aria-label="Add something else to the list"
+                        className="flex-1 bg-transparent text-sm rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 placeholder:text-stone-500"
                     />
                     {draft.trim() && (
                         <button type="submit" className="text-xs font-semibold text-stone-900 hover:underline">

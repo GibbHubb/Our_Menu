@@ -117,6 +117,7 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                                 }}
                                 className="bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white hover:text-amber-600 z-10"
                                 title="Edit Recipe"
+                                aria-label="Edit recipe"
                             >
                                 <Pencil className="w-3 h-3" />
                             </button>

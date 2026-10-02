@@ -103,8 +103,8 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                     {/* Basic Info */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Title</label>
-                            <input
+                            <label htmlFor="edit-title" className="text-sm font-bold uppercase tracking-wider text-stone-500">Title</label>
+                            <input id="edit-title"
                                 required
                                 value={formData.title || ""}
                                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
@@ -136,7 +136,7 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                                             }}
                                             className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${isSelected
                                                 ? "bg-stone-900 text-white shadow-md transform scale-105"
-                                                : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                                                : "bg-stone-100 text-stone-600 hover:bg-stone-200"
                                                 }`}
                                         >
                                             {c}
@@ -149,9 +149,9 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
 
                     {/* Image Section */}
                     <div className="space-y-2">
-                        <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Photo</label>
+                        <label htmlFor="edit-photo" className="text-sm font-bold uppercase tracking-wider text-stone-500">Photo</label>
                         <div className="flex gap-2">
-                            <input
+                            <input id="edit-photo"
                                 type="url"
                                 placeholder="https://..."
                                 value={formData.image_url || ""}
@@ -190,8 +190,8 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
 
                     {/* Link */}
                     <div className="space-y-2">
-                        <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Recipe Link (Optional)</label>
-                        <input
+                        <label htmlFor="edit-recipe-link" className="text-sm font-bold uppercase tracking-wider text-stone-500">Recipe Link (Optional)</label>
+                        <input id="edit-recipe-link"
                             type="url"
                             placeholder="https://recipetineats.com/..."
                             value={formData.link || ""}
@@ -240,15 +240,15 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                                 </button>
                             ))}
                             {formData.rating && (
-                                <span className="ml-2 text-sm text-stone-400 self-center">{formData.rating}/5</span>
+                                <span className="ml-2 text-sm text-stone-500 self-center">{formData.rating}/5</span>
                             )}
                         </div>
                     </div>
 
                     {/* Notes */}
                     <div className="space-y-2">
-                        <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Notes</label>
-                        <textarea
+                        <label htmlFor="edit-notes" className="text-sm font-bold uppercase tracking-wider text-stone-500">Notes</label>
+                        <textarea id="edit-notes"
                             rows={2}
                             placeholder="e.g. Add more garlic next time..."
                             value={formData.notes || ""}
@@ -260,7 +260,7 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                     {/* OM13 — Seasons */}
                     <div className="space-y-2">
                         <label className="text-sm font-bold uppercase tracking-wider text-stone-500">
-                            Seasons <span className="text-xs text-stone-400 normal-case font-normal">(leave empty for year-round)</span>
+                            Seasons <span className="text-xs text-stone-500 normal-case font-normal">(leave empty for year-round)</span>
                         </label>
                         <div className="flex flex-wrap gap-2">
                             <button
@@ -269,7 +269,7 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                                 className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${
                                     (formData.seasons ?? []).length === 0
                                         ? "bg-stone-900 text-white shadow-md"
-                                        : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                                        : "bg-stone-100 text-stone-600 hover:bg-stone-200"
                                 }`}
                             >
                                 Year-round
@@ -288,7 +288,7 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                                         className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${
                                             isSelected
                                                 ? "bg-stone-900 text-white shadow-md"
-                                                : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                                                : "bg-stone-100 text-stone-600 hover:bg-stone-200"
                                         }`}
                                     >
                                         {SEASON_LABEL[s]}
@@ -301,7 +301,7 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                     {/* OM30 — Diet tags */}
                     <div className="space-y-2">
                         <label className="text-sm font-bold uppercase tracking-wider text-stone-500">
-                            Diet <span className="text-xs text-stone-400 normal-case font-normal">(only tag what the recipe genuinely satisfies)</span>
+                            Diet <span className="text-xs text-stone-500 normal-case font-normal">(only tag what the recipe genuinely satisfies)</span>
                         </label>
                         <div className="flex flex-wrap gap-2">
                             {DIETS.map((d) => {
@@ -318,7 +318,7 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                                         className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${
                                             isSelected
                                                 ? "bg-stone-900 text-white shadow-md"
-                                                : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                                                : "bg-stone-100 text-stone-600 hover:bg-stone-200"
                                         }`}
                                     >
                                         {DIET_LABEL[d]}
@@ -343,7 +343,7 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
                                             className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${
                                                 isIn
                                                     ? "bg-indigo-600 text-white shadow-md"
-                                                    : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+                                                    : "bg-stone-100 text-stone-600 hover:bg-stone-200"
                                             }`}
                                         >
                                             {c.name}
@@ -356,8 +356,8 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
 
                     {/* Ingredients */}
                     <div className="space-y-2">
-                        <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Ingredients</label>
-                        <textarea
+                        <label htmlFor="edit-ingredients" className="text-sm font-bold uppercase tracking-wider text-stone-500">Ingredients</label>
+                        <textarea id="edit-ingredients"
                             rows={5}
                             placeholder="• 500g Beef Mince&#10;• 1 Onion, diced..."
                             value={formData.ingredients || ""}
@@ -368,8 +368,8 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
 
                     {/* Instructions */}
                     <div className="space-y-2">
-                        <label className="text-sm font-bold uppercase tracking-wider text-stone-500">Instructions</label>
-                        <textarea
+                        <label htmlFor="edit-instructions" className="text-sm font-bold uppercase tracking-wider text-stone-500">Instructions</label>
+                        <textarea id="edit-instructions"
                             rows={5}
                             placeholder="1. Brown the mince...&#10;2. Add the sauce..."
                             value={formData.instructions || ""}

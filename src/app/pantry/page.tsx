@@ -341,7 +341,7 @@ export default function PantryPage() {
             />
           ) : items.filter((i) => i.category === section).length === 0 ? (
             <div className="text-center py-8 space-y-3">
-              <p className="text-stone-400 italic">Nothing in {PANTRY_SECTIONS.find((x) => x.key === section)?.label} yet.</p>
+              <p className="text-stone-500 italic">Nothing in {PANTRY_SECTIONS.find((x) => x.key === section)?.label} yet.</p>
               <button
                 onClick={() => void handleImport()}
                 disabled={importing}

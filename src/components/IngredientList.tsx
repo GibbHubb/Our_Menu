@@ -91,6 +91,7 @@ export default function IngredientList({ ingredients, scale, setScale }: Ingredi
                             onChange={(e) => handleScale(parseFloat(e.target.value))}
                             className="w-20 h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-stone-900"
                             title={`Scale: ${scale}x`}
+                            aria-label="Scale ingredients"
                         />
                         <span className="text-xs font-mono w-6">{scale}x</span>
                     </div>

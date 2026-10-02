@@ -71,7 +71,7 @@ export default function DecisionMaker({ isOpen, onClose, recipes }: DecisionMake
     if (!isOpen) return null;
 
     return (
-        <Modal labelledBy="decision-title" onClose={onClose} className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-md animate-in fade-in duration-300">
+        <Modal labelledBy="decision-title" onClose={onClose} className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-stone-900/85 backdrop-blur-md animate-in fade-in duration-300">
             <div className="w-full max-w-sm flex flex-col items-center">
                 <div className="bg-white/10 p-2 rounded-full mb-4">
                     <Sparkles className="w-8 h-8 text-amber-300" />

@@ -148,11 +148,11 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     {/* OM10 — Import from URL */}
                     <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
-                        <label className="block text-sm font-medium text-stone-700 mb-1 flex items-center gap-1.5">
+                        <label htmlFor="add-import-from-a-recipe-url" className="block text-sm font-medium text-stone-700 mb-1 flex items-center gap-1.5">
                             <Link2 className="w-4 h-4" /> Import from a recipe URL (optional)
                         </label>
                         <div className="flex gap-2">
-                            <input
+                            <input id="add-import-from-a-recipe-url"
                                 type="url"
                                 className="flex-1 px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-stone-900 focus:outline-none text-sm"
                                 placeholder="https://www.allrecipes.com/recipe/…"
@@ -179,8 +179,8 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-stone-700 mb-1">Dish Name</label>
-                        <input
+                        <label htmlFor="add-dish-name" className="block text-sm font-medium text-stone-700 mb-1">Dish Name</label>
+                        <input id="add-dish-name"
                             required
                             type="text"
                             className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-stone-900 focus:outline-none"
@@ -220,7 +220,7 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
 
                     <div>
                         <label className="block text-sm font-medium text-stone-700 mb-2">
-                            Seasons <span className="text-xs text-stone-400">(leave empty for year-round)</span>
+                            Seasons <span className="text-xs text-stone-500">(leave empty for year-round)</span>
                         </label>
                         <div className="flex flex-wrap gap-2">
                             <button
@@ -262,7 +262,7 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                     {/* OM30 — Diet tags */}
                     <div>
                         <label className="block text-sm font-medium text-stone-700 mb-2">
-                            Diet <span className="text-xs text-stone-400">(only tag what the recipe satisfies)</span>
+                            Diet <span className="text-xs text-stone-500">(only tag what the recipe satisfies)</span>
                         </label>
                         <div className="flex flex-wrap gap-2">
                             {DIETS.map((d) => {
@@ -291,8 +291,8 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-stone-700 mb-1">Recipe Link (Optional)</label>
-                        <input
+                        <label htmlFor="add-recipe-link" className="block text-sm font-medium text-stone-700 mb-1">Recipe Link (Optional)</label>
+                        <input id="add-recipe-link"
                             type="url"
                             className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-stone-900 focus:outline-none"
                             placeholder="https://..."
@@ -302,9 +302,9 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-stone-700 mb-1">Image URL (Optional)</label>
+                        <label htmlFor="add-image-url" className="block text-sm font-medium text-stone-700 mb-1">Image URL (Optional)</label>
                         <div className="flex gap-2">
-                            <input
+                            <input id="add-image-url"
                                 type="url"
                                 className="flex-1 px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-stone-900 focus:outline-none"
                                 placeholder="https://image..."
@@ -315,7 +315,7 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                                 onUploaded={(url) => setFormData((f) => ({ ...f, image_url: url }))}
                             />
                         </div>
-                        <p className="text-xs text-stone-400 mt-1">Paste an image address, or upload one (auto-resized, scoped to your account).</p>
+                        <p className="text-xs text-stone-500 mt-1">Paste an image address, or upload one (auto-resized, scoped to your account).</p>
                         {formData.image_url && (
                             // OM57 — raw <img>, not next/image: renders the URL the user just
                             // typed/uploaded, not a page-load fetch (out of scope per OM57.md
@@ -336,10 +336,10 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
                     {/* OM10 — extracted ingredients/instructions only show when we have them */}
                     {formData.ingredients && (
                         <div>
-                            <label className="block text-sm font-medium text-stone-700 mb-1">
-                                Ingredients <span className="text-xs text-stone-400">(imported — edit before saving)</span>
+                            <label htmlFor="add-ingredients" className="block text-sm font-medium text-stone-700 mb-1">
+                                Ingredients <span className="text-xs text-stone-500">(imported — edit before saving)</span>
                             </label>
-                            <textarea
+                            <textarea id="add-ingredients"
                                 rows={5}
                                 className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-stone-900 focus:outline-none text-sm font-mono"
                                 value={formData.ingredients}
@@ -350,10 +350,10 @@ export default function AddRecipeModal({ isOpen, onClose, onAdd, categories }: A
 
                     {formData.instructions && (
                         <div>
-                            <label className="block text-sm font-medium text-stone-700 mb-1">
-                                Instructions <span className="text-xs text-stone-400">(imported — edit before saving)</span>
+                            <label htmlFor="add-instructions" className="block text-sm font-medium text-stone-700 mb-1">
+                                Instructions <span className="text-xs text-stone-500">(imported — edit before saving)</span>
                             </label>
-                            <textarea
+                            <textarea id="add-instructions"
                                 rows={6}
                                 className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-stone-900 focus:outline-none text-sm"
                                 value={formData.instructions}

@@ -145,7 +145,7 @@ export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, o
 
             {/* Footer */}
             <div className="flex flex-col items-center gap-4 pb-12 pt-4 border-t border-stone-100 mt-10">
-                <p className="text-stone-400 text-sm italic">Max & Bron&apos;s Digital Menu</p>
+                <p className="text-stone-500 text-sm italic">Max & Bron&apos;s Digital Menu</p>
             </div>
         </div>
     );
