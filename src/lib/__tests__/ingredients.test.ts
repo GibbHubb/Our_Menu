@@ -37,6 +37,24 @@ describe('canonicaliseIngredient', () => {
     });
 });
 
+describe('canonicaliseIngredient — irregular plurals (OM66)', () => {
+    // One case per irregular plural in IRREGULAR_PLURALS / ALIASES.
+    it.each([
+        ['2 chillies', 'chilli'], ['1 chilli', 'chilli'], ['red chillies', 'red chilli'],
+        ['3 chilies', 'chili'], ['bay leaves', 'bay leaf'], ['curry leaves', 'curry leaf'],
+        ['2 loaves bread', 'loaf bread'], ['tomatoes', 'tomato'], ['potatoes', 'potato'],
+    ])('%s -> %s', (input, key) => {
+        expect(k(input)).toBe(key);
+    });
+    it('"1 chilli" and "2 chillies" are one thing to buy', () => {
+        expect(ingredientsMatch('1 chilli', '2 chillies, finely chopped')).toBe(true);
+        expect(ingredientsMatch('bay leaf', '3 bay leaves')).toBe(true);
+    });
+    it('CONTROL: chillies is not "chilly" (the pre-OM66 key)', () => {
+        rejectWrong(k('chillies'), 'chilly');
+    });
+});
+
 describe('ingredientsMatch', () => {
     it('matches across quantity, prep and colour words', () => {
         expect(ingredientsMatch('Red Onion', '1 onion, diced')).toBe(true);

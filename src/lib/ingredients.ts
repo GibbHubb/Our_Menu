@@ -63,7 +63,20 @@ const OES_WORDS = new Set([
   'tomato', 'potato', 'mango', 'volcano', 'echo', 'hero',
 ]);
 
+// OM66 — plurals the suffix rules get wrong. These used to sit only in ALIASES,
+// which is consulted AFTER singularising, so "chillies" had already become
+// "chilly" and never matched: "1 chilli" + "2 chillies" stayed two list rows.
+// Word-level, so "red chillies" and "bay leaves" are covered too.
+const IRREGULAR_PLURALS: Record<string, string> = {
+  chillies: 'chilli',
+  chilies:  'chili',
+  leaves:   'leaf',
+  loaves:   'loaf',
+  halves:   'half',
+};
+
 function singularise(word: string): string {
+  if (IRREGULAR_PLURALS[word]) return IRREGULAR_PLURALS[word];
   if (word.length < 4) return word;
   if (word.endsWith('ies'))  return word.slice(0, -3) + 'y';
   if (word.endsWith('ses'))  return word.slice(0, -2);   // boxes → box, glasses → glass-y but acceptable
@@ -107,6 +120,11 @@ export function canonicaliseIngredient(input: string): string {
     if (PREP_WORDS.has(t)) continue;
     kept.push(t);
   }
+
+  // OM66 — alias lookup BEFORE singularising as well as after: an alias
+  // written in the plural must not depend on the suffix rules agreeing with it.
+  const unsingular = kept.join(' ').trim();
+  if (ALIASES[unsingular]) return ALIASES[unsingular];
 
   // Singularise each word, then re-join
   const joined = kept.map(singularise).join(' ').trim();
