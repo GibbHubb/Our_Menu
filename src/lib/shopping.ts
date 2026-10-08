@@ -428,14 +428,16 @@ export async function getTicks(): Promise<TickState> {
     return { keys, lastAt };
 }
 
-export async function setTick(lineKey: string, checked: boolean): Promise<void> {
+/** OM60 — resolves true only when the tick landed, so a failure can be queued. */
+export async function setTick(lineKey: string, checked: boolean): Promise<boolean> {
     // `updated_at` is deliberately NOT sent: migration 024 has Postgres stamp
     // it. The client used to write its own clock into the column the timeout
     // then measured, which made the whole server-clock exercise circular.
     const { error } = await supabase
         .from('shopping_ticks')
         .upsert({ line_key: lineKey, checked }, { onConflict: 'household_id,line_key' });
-    if (error) console.error('setTick:', error);
+    if (error) { console.error('setTick:', error); return false; }
+    return true;
 }
 
 /**

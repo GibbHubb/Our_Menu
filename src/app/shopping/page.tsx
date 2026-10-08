@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-    Check, Copy, Loader2, Plus, Trash2, X, AlertCircle, RotateCcw, CheckCircle2,
+    Check, Copy, Loader2, Plus, Trash2, X, AlertCircle, RotateCcw, CheckCircle2, WifiOff,
 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import {
@@ -27,6 +27,9 @@ import {
 import AppShell from "@/components/AppShell";  // OM43
 import { aisleFor, AISLE_ORDER, AISLE_LABEL, AISLE_EMOJI, type Aisle } from "@/lib/aisles";  // OM45
 import { ErrorState } from "@/components/StateViews";  // OM59
+import {
+    applyPending, enqueueTick, flushTicks, pendingTicks, readListCache, saveListCache, useOnline,
+} from "@/lib/offline";  // OM60
 
 const AUTO_FINISH_MINUTES = Math.round(AUTO_FINISH_MS / 60_000);
 
@@ -65,19 +68,49 @@ export default function ShoppingPage() {
     // same failing delete every 60 seconds, forever, with nothing on screen
     // changing. A manual press is still allowed and clears it.
     const autoGaveUp = useRef(false);
+    // OM60 — what the page is showing when the server could not be asked:
+    // null = live data; otherwise when the cached copy was saved.
+    const [cachedAt, setCachedAt] = useState<string | null>(null);
+    const [pending, setPending] = useState(0);
+    const online = useOnline();
+    const uid = user?.id ?? null;
+    const flushing = useRef(false);
 
     // Every setState happens after the await: touching state synchronously in
     // the effect below trips react-hooks/set-state-in-effect, and the page
     // starts in `loading` anyway.
     const load = useCallback(async () => {
+        // OM60 — fall back to the last list this account saw on this device,
+        // and say so (the banner below). Never over a fresher copy on screen.
+        const fromCache = (): boolean => {
+            const cache = uid ? readListCache(uid) : null;
+            if (!uid || !cache) return false;
+            setRows((cur) => (cur.length ? cur : cache.rows));
+            setTicks((cur) => (cur.size ? cur : applyPending(new Set(cache.ticks), pendingTicks(uid))));
+            setLastTickAt((cur) => cur ?? (cache.lastAt ? new Date(cache.lastAt) : null));
+            setCachedAt(cache.savedAt);
+            setPending(pendingTicks(uid).length);
+            return true;
+        };
+        // The browser already knows there is no network: do not make the
+        // shopper wait for three requests to fail first.
+        if (typeof navigator !== "undefined" && !navigator.onLine && fromCache()) {
+            setLoadError(true);
+            setLoading(false);
+            return;
+        }
         try {
             // The auto-finish measures minutes, so it measures them against the
             // server's clock rather than this device's. Cheap and cached.
             const [l, t] = await Promise.all([getList(), getTicks(), syncServerClock()]);
+            // OM60 — ticks still waiting to be sent stay ticked on screen.
+            const shown = uid ? applyPending(t.keys, pendingTicks(uid)) : t.keys;
             setRows(l);
-            setTicks(t.keys);
+            setTicks(shown);
             setLastTickAt(t.lastAt);
             setLoadError(false);
+            setCachedAt(null);
+            if (uid) { saveListCache(uid, l, shown, t.lastAt); setPending(pendingTicks(uid).length); }
         } catch (e) {
             // OM59 — getList/getTicks throw on a fetch failure now. Leave
             // whatever rows/ticks were already on screen alone; the render
@@ -85,17 +118,47 @@ export default function ShoppingPage() {
             // back to.
             console.error("shopping load:", e);
             setLoadError(true);
+            fromCache();
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [uid]);
+
+    // OM60 — replay queued ticks. Runs when the browser says it is back online,
+    // when the app comes back to the foreground, and before the first load.
+    const flush = useCallback(async () => {
+        if (!uid || flushing.current || !pendingTicks(uid).length) return;
+        flushing.current = true;
+        try {
+            const res = await flushTicks(uid, setTick);
+            setPending(res.remaining);
+            if (res.landed) { announceListChanged(); await load(); }
+        } finally {
+            flushing.current = false;
+        }
+    }, [uid, load]);
+
+    useEffect(() => {
+        if (!uid) return;
+        const onOnline = () => { void flush(); };
+        // Coming back to the app: send what is queued, then re-read the list
+        // (the other shopper may have changed it; offline, this lands on the cache).
+        const onVisible = () => { if (document.visibilityState === "visible") void flush().then(load); };
+        window.addEventListener("online", onOnline);
+        document.addEventListener("visibilitychange", onVisible);
+        return () => {
+            window.removeEventListener("online", onOnline);
+            document.removeEventListener("visibilitychange", onVisible);
+        };
+    }, [uid, flush, load]);
 
     useEffect(() => {
         if (authLoading) return;
         if (!user) { router.replace("/login?next=/shopping"); return; }
-        // `load` awaits before it touches state, so no render cascades here.
-        void load();
-    }, [authLoading, user, router, load]);
+        // `load` awaits before it touches state, so no render cascades here;
+        // queued ticks from an earlier session go first so the load sees them.
+        void flush().then(load);
+    }, [authLoading, user, router, load, flush]);
 
     // OM45 — one lap of the shop instead of an alphabetical zig-zag between
     // the fruit and the freezer.
@@ -122,7 +185,17 @@ export default function ShoppingPage() {
         setTicks(next);                        // optimistic — the shop has bad wifi
         setLastTickAt(new Date(serverNow()));  // ticking is activity: restart the clock
         setTrip(null);                         // a new tick means a new trip
-        await setTick(key, next.has(key));
+        // OM60 — a tick that cannot reach the server is queued, not dropped.
+        // It used to be a console.error nobody on a phone could see.
+        let landed = false;
+        if (navigator.onLine) {
+            try { landed = await setTick(key, next.has(key)); } catch { landed = false; }
+        }
+        if (uid) {
+            if (!landed) enqueueTick(uid, key, next.has(key));
+            saveListCache(uid, rows, next, new Date(serverNow()));
+            setPending(pendingTicks(uid).length);
+        }
         announceListChanged();                 // keep the nav badge honest
     };
 
@@ -166,6 +239,8 @@ export default function ShoppingPage() {
         if (loading || finishing) return;
         const check = () => {
             if (autoFiring.current || autoGaveUp.current) return;
+            // OM60 — never finish a trip whose ticks have not reached the server.
+            if (!navigator.onLine || (uid && pendingTicks(uid).length)) return;
             if (!tripIsStale(lastTickAt, ticks)) return;
             autoFiring.current = true;
             void finish(true).finally(() => { autoFiring.current = false; });
@@ -173,7 +248,7 @@ export default function ShoppingPage() {
         check();
         const timer = setInterval(check, 60_000);
         return () => clearInterval(timer);
-    }, [loading, finishing, lastTickAt, ticks, finish]);
+    }, [loading, finishing, lastTickAt, ticks, finish, uid]);
 
     // OM49 review finding 6 — Copy List used to copy whatever was ticked, which
     // in the new default state is nothing, and still flashed "Copied!" over an
@@ -286,9 +361,24 @@ export default function ShoppingPage() {
                     </div>
                 )}
 
+                {/* OM60 — which state this is, always on screen when it is not
+                    "live". role=status so a screen reader hears it change. */}
+                {(!online || cachedAt || pending > 0) && (
+                    <div role="status" className="flex items-start gap-3 bg-sky-50 border border-sky-200 text-sky-900 rounded-xl px-4 py-2.5 text-sm">
+                        <WifiOff className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                        <span>
+                            {!online ? "Offline" : cachedAt ? "Can’t reach the server" : "Back online"}
+                            {cachedAt
+                                ? ` — showing your last saved list (saved ${new Date(cachedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}).`
+                                : !online ? (rows.length ? " — the list below is what you last saw." : " — and nothing is saved on this phone yet.") : "."}
+                            {pending > 0 && ` ${pending} tick${pending === 1 ? "" : "s"} saved on this phone, sent when you’re back online.`}
+                        </span>
+                    </div>
+                )}
+
                 {/* OM59 review — a failed refresh over rows already on screen
                     must not pass for current data (e.g. just after Finished). */}
-                {loadError && rows.length > 0 && (
+                {loadError && rows.length > 0 && !cachedAt && online && (
                     <div className="mb-3 flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-4 py-2.5 text-sm">
                         <span>Couldn&apos;t refresh the list. This may be out of date.</span>
                         <button onClick={() => void load()} className="font-semibold underline underline-offset-2">Retry</button>
@@ -438,7 +528,7 @@ export default function ShoppingPage() {
                     <section className="pb-4">
                         <button
                             onClick={() => { autoGaveUp.current = false; void finish(false); }}
-                            disabled={finishing}
+                            disabled={finishing || !online || pending > 0}
                             className="w-full flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-60"
                         >
                             {finishing
@@ -446,6 +536,11 @@ export default function ShoppingPage() {
                                 : <CheckCircle2 className="w-4 h-4" />}
                             Checked out — {ticked} item{ticked === 1 ? "" : "s"}
                         </button>
+                        {(!online || pending > 0) && (
+                            <p className="text-xs text-sky-900 text-center mt-2">
+                                Checking out waits until your ticks have reached the server.
+                            </p>
+                        )}
                         <p className="text-[11px] text-stone-400 text-center mt-2">
                             Everything ticked comes off the list.
                             {outstanding > 0 && ` The ${outstanding} you haven't ticked stay${outstanding === 1 ? "s" : ""} on it.`}

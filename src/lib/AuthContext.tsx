@@ -10,6 +10,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./supabaseClient";
+import { clearOfflineData } from "./offline";  // OM60
 
 interface AuthState {
   session: Session | null;
@@ -82,6 +83,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    // OM60 — the cached shopping list and any queued ticks belong to this
+    // account; a shared phone must not show them to the next person.
+    clearOfflineData();
     await supabase.auth.signOut();
     // Don't clear claim flag — re-signing the same uid shouldn't re-claim.
   };

@@ -70,6 +70,7 @@ class DB:
         self.leaks: list[str] = []
         self.log: list[str] = []
         self.offline = False          # OM60: answer nothing while "offline"
+        self.fail_writes: set[str] = set()  # OM60 negative control: tables whose writes 404
 
     def rows(self, table: str) -> list[dict]:
         return self.tables.setdefault(table, [])
@@ -189,6 +190,8 @@ def handler(db: DB):
                 data = data[: int(params["limit"])]
             return out(data)
 
+        if table in db.fail_writes:
+            return reply({"code": "PGRST205", "message": f"Could not find the table 'public.{table}'"}, 404)
         body = json.loads(request.post_data or "null")
         if method == "POST":
             items = body if isinstance(body, list) else [body]
