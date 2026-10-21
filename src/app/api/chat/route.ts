@@ -1,6 +1,7 @@
 
 import { NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/supabaseServer";
+import { CHAT_COMPLETIONS_URL, LLM_MODEL, llmHeaders } from "@/lib/llm";
 
 export async function POST(req: Request) {
     // OM55 — signed-in callers only. This route calls a paid/LLM backend (or fetches an arbitrary
@@ -12,16 +13,11 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { messages } = body;
 
-        // "http://192.168.2.182:8003/v1/chat/completions"
-        const LLM_URL = "http://192.168.2.182:8003/v1/chat/completions";
-
-        const response = await fetch(LLM_URL, {
+        const response = await fetch(CHAT_COMPLETIONS_URL, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
+            headers: llmHeaders(),
             body: JSON.stringify({
-                model: "test", // or whatever model name the server expects, usually flexible with vLLM/Ollama
+                model: LLM_MODEL,
                 messages: messages,
                 stream: false // For simplicity first, can do stream later if needed
             }),

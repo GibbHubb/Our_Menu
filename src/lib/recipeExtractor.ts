@@ -5,13 +5,11 @@
  * and the per-recipe API route (`/api/recipes/[id]/extract`).
  *
  * Strategy: try JSON-LD first (fast, deterministic). If it doesn't yield
- * ingredients, fall back to the LAN LLM. Both paths can return partial
+ * ingredients, fall back to the LLM (see ./llm). Both paths can return partial
  * results — the caller decides what to do with what it gets back.
  */
 
-const LLM_BASE_URL = process.env.LLM_BASE_URL || "http://192.168.2.182:8003";
-const LLM_DEFAULT_MODEL =
-    process.env.LLM_DEFAULT_MODEL || "meta-llama/Meta-Llama-3-8B-Instruct";
+import { CHAT_COMPLETIONS_URL, LLM_MODEL, llmHeaders } from "./llm";
 
 export interface ExtractedRecipe {
     ingredients: string[];
@@ -334,18 +332,6 @@ function stripHtml(html: string): string {
         .slice(0, 15000);
 }
 
-async function detectModel(): Promise<string> {
-    try {
-        const r = await fetch(`${LLM_BASE_URL}/v1/models`);
-        if (!r.ok) return LLM_DEFAULT_MODEL;
-        const data = await r.json();
-        if (data?.data?.[0]?.id) return data.data[0].id;
-    } catch {
-        /* fall through */
-    }
-    return LLM_DEFAULT_MODEL;
-}
-
 interface LlmResult {
     ingredients: string[];
     instructions: string[];
@@ -354,7 +340,6 @@ interface LlmResult {
 async function extractWithLLM(url: string, html: string): Promise<LlmResult | null> {
     try {
         const text = stripHtml(html);
-        const model = await detectModel();
         const prompt = `You are a recipe parser. From the webpage content below, extract:
 1. The list of ingredients
 2. The cooking instructions, broken into discrete steps
@@ -367,11 +352,11 @@ Webpage URL: ${url}
 Content:
 ${text}`;
 
-        const resp = await fetch(`${LLM_BASE_URL}/v1/chat/completions`, {
+        const resp = await fetch(CHAT_COMPLETIONS_URL, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: llmHeaders(),
             body: JSON.stringify({
-                model,
+                model: LLM_MODEL,
                 messages: [
                     {
                         role: "system",

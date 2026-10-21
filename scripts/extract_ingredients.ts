@@ -6,6 +6,7 @@ import {
     fetchAndParseRecipe,
     ingredientsToShoppingList,
 } from '../src/lib/recipeExtractor';
+import { CHAT_COMPLETIONS_URL, LLM_MODEL, llmHeaders } from '../src/lib/llm';
 
 // --- Environment Variable Loading ---
 // Simple .env parser to avoid adding 'dotenv' dependency
@@ -77,29 +78,11 @@ Content:
 ${textContent}
 `;
 
-        // Auto-detect model if possible, or use a default
-        let modelName = "meta-llama/Meta-Llama-3-8B-Instruct";
-        try {
-            const modelRes = await fetch("http://192.168.2.182:8003/v1/models");
-            if (modelRes.ok) {
-                const modelData = await modelRes.json();
-                if (modelData.data && modelData.data.length > 0) {
-                    modelName = modelData.data[0].id;
-                    console.log(`Using detected model: ${modelName}`);
-                }
-            }
-        } catch {
-            console.warn("Could not auto-detect model, using default.");
-        }
-
-        // Use standard OpenAI-compatible endpoint
-        const response = await fetch("http://192.168.2.182:8003/v1/chat/completions", {
+        const response = await fetch(CHAT_COMPLETIONS_URL, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
+            headers: llmHeaders(),
             body: JSON.stringify({
-                model: modelName,
+                model: LLM_MODEL,
                 messages: [
                     { role: "system", content: "You are a grocery list extractor. Return ONLY a JSON array of ingredients." },
                     { role: "user", content: prompt }
