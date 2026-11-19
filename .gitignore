@@ -42,3 +42,7 @@ next-env.d.ts
 
 # python
 __pycache__/
+
+# probe / tool output (OM63)
+probe_output.txt
+*.probe.txt

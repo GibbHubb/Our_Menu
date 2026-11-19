@@ -1,3 +1,8 @@
+-- ⛔ HISTORICAL. DO NOT RUN. Archived from the repo root by OM63 (2026-11-17).
+-- The original 'recipes' table, Feb 2026, before supabase/migrations/ existed. Kept because it is the
+-- only record of the base DDL: no numbered migration creates 'recipes'. Its open 'for all users'
+-- policies were replaced by 010_auth_scoping.sql. See supabase/legacy/README.md and docs/technical/data-model.md.
+
 -- Create the recipes table
 create table public.recipes (
   id uuid default gen_random_uuid() primary key,

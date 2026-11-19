@@ -22,7 +22,7 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
     const [recipe, setRecipe] = useState<Recipe | null>(null);
     const [loading, setLoading] = useState(true);
     // OM59 — was two browser alert boxes: "Failed to save! Error: ${error.message}…
-    // Tip: Run 'repair_database.sql'" and a permission-denied variant with the
+    // Tip: Run 'repair_database.sql'" (now supabase/legacy/, never run it) and a permission-denied variant with the
     // same instruction. Neither is actionable by anyone using this app, and a
     // failed save is a data-loss risk, so it is a persistent banner (not a
     // timed toast) that stays until dismissed or the next successful save.
@@ -117,12 +117,14 @@ export default function RecipePage({ params }: { params: Promise<{ id: string }>
             .select('id');
 
         if (error) {
-            // OM59 — the raw Postgres error (and the repair_database.sql
-            // instruction) stayed in the console for debugging; the user
-            // gets a generic, actionable line instead. Whether that
-            // permission failure is still a live, recurring issue is an open
-            // question for Max (plan §8) — if it is, the fix belongs in RLS,
-            // not in this message.
+            // OM59 — the raw Postgres error stays in the console for
+            // debugging; the user gets a generic, actionable line instead.
+            // OM63 checked the old "run repair_database.sql" advice against
+            // production RLS: every recipe sits in a household with members,
+            // so a member's update passes recipes_update. That script now
+            // lives in supabase/legacy/ and must never be run (it reopens
+            // recipes to the anon key). A real permission failure is an RLS
+            // fix, not a message.
             console.error("Update Error:", error);
             setSaveError("Couldn't save that change. Try again in a moment.");
             throw error;

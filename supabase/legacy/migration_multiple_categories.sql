@@ -1,3 +1,8 @@
+-- ⛔ HISTORICAL. DO NOT RUN. Archived from the repo root by OM63 (2026-11-17).
+-- Converted recipes.category from text to text[]; live already (text[], default '{}').
+-- Running it again would not fail but corrupt: ARRAY[category] on a text[] value nests it ({a,b} becomes {{a,b}}).
+-- See supabase/legacy/README.md.
+
 -- Migration: Convert category to category[]
 -- This script will convert the existing 'category' column from text to text[] (array of text).
 -- It handles the conversion by wrapping existing single values in an array.

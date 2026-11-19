@@ -1,3 +1,9 @@
+-- ⛔ HISTORICAL. DO NOT RUN. Archived from the repo root by OM63 (2026-11-17).
+-- DANGEROUS if run today: it re-creates 'Enable ... access for all users' policies (USING true) on
+-- public.recipes. Postgres ORs permissive policies, so anyone holding the public anon key could read,
+-- change and delete every household's recipes. The app used to tell users to run this after a failed
+-- save; that message was removed in OM59. See supabase/legacy/README.md.
+
 -- MASTER REPAIR SCRIPT
 -- Run this in your Supabase SQL Editor to fix EVERYTHING
 

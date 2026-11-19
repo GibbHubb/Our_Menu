@@ -46,15 +46,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### 3. Set up the database
-Run the schema in your Supabase SQL editor:
-```bash
-# Initial schema
-supabase_schema.sql
-
-# Migrations (if upgrading)
-add_shopping_list_migration.sql
-migration_multiple_categories.sql
-```
+The schema is the numbered sequence in `supabase/migrations/`, applied in order. What each table means, how
+migrations are applied, and the one gap in rebuilding from scratch (the `recipes` base table predates the sequence)
+are in [`docs/technical/data-model.md`](docs/technical/data-model.md). Do not run anything in `supabase/legacy/`.
 
 ### 4. Run the dev server
 ```bash
