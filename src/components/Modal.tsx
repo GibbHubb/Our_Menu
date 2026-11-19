@@ -10,7 +10,7 @@
 //   - role="dialog" + aria-modal + aria-labelledby (the heading's id)
 //   - focus moves in on open (first focusable control, else the dialog)
 //   - Tab / Shift+Tab wrap inside the dialog while it is open
-//   - Escape calls onClose
+//   - Escape calls onClose (after a confirm when `dirty`: OM58 review)
 //   - focus returns to whatever had it before, on close
 //
 // It renders the caller's overlay classes verbatim, so the look and the
@@ -19,6 +19,7 @@
 // than having to press Close.
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { shouldCloseOnEscape } from "@/lib/dialog";  // OM58 review
 
 const FOCUSABLE = [
     "a[href]", "button:not([disabled])", "input:not([disabled]):not([type=hidden])",
@@ -31,15 +32,19 @@ interface ModalProps {
     onClose: () => void;
     /** The overlay's existing classes, unchanged. */
     className: string;
+    /** OM58 review — the dialog holds unsaved input: Escape confirms before it closes. */
+    dirty?: boolean;
     children: ReactNode;
 }
 
-export default function Modal({ labelledBy, onClose, className, children }: ModalProps) {
+export default function Modal({ labelledBy, onClose, className, dirty = false, children }: ModalProps) {
     const ref = useRef<HTMLDivElement>(null);
     // Read through a ref so a parent re-render (new onClose identity) does not
     // re-run the open/close effect and bounce focus.
     const onCloseRef = useRef(onClose);
     useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+    const dirtyRef = useRef(dirty);
+    useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
 
     useEffect(() => {
         const previous = document.activeElement as HTMLElement | null;
@@ -55,7 +60,9 @@ export default function Modal({ labelledBy, onClose, className, children }: Moda
         const onKey = (e: KeyboardEvent) => {
             if (e.key === "Escape") {
                 e.stopPropagation();
-                onCloseRef.current();
+                // OM58 review — same reason backdrop click is not a close: a
+                // half-filled form asks before Escape throws it away.
+                if (shouldCloseOnEscape(dirtyRef.current, (m) => window.confirm(m))) onCloseRef.current();
                 return;
             }
             if (e.key !== "Tab") return;

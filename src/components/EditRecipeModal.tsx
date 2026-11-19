@@ -5,6 +5,7 @@ import { SEASONS, SEASON_LABEL, type Season } from "@/lib/seasons";
 import { DIETS, DIET_LABEL, type Diet } from "@/lib/diet";  // OM30
 import { ImageUploadButton } from "./AddRecipeModal";  // OM25 — shared uploader
 import Modal from "./Modal";  // OM58
+import { formIsDirty } from "@/lib/dialog";  // OM58 review
 import {
     getCollections,
     getRecipeCollections,
@@ -90,7 +91,18 @@ export default function EditRecipeModal({ isOpen, onClose, onUpdate, recipe, cat
     if (!isOpen || !recipe) return null;
 
     return (
-        <Modal labelledBy="edit-recipe-title" onClose={() => { setUpdateError(null); onClose(); }} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <Modal
+            labelledBy="edit-recipe-title"
+            onClose={() => { setUpdateError(null); onClose(); }}
+            // OM58 review — Escape asks before it throws away unsaved edits.
+            // The baseline is built exactly as the effect above fills the form.
+            dirty={formIsDirty(formData, {
+                ...recipe,
+                ingredients: recipe.ingredients || "",
+                instructions: recipe.instructions || "",
+                notes: recipe.notes || "",
+            })}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white text-stone-900 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
                 <div className="p-6 border-b border-stone-100 flex justify-between items-center sticky top-0 bg-white z-10">
                     <h2 id="edit-recipe-title" className="text-2xl font-serif">Edit Recipe</h2>

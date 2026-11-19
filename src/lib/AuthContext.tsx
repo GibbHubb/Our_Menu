@@ -10,7 +10,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./supabaseClient";
-import { clearOfflineData } from "./offline";  // OM60
+import { clearOfflineData, confirmSignOut, shouldClearOnAuthEvent } from "./offline";  // OM60
 
 interface AuthState {
   session: Session | null;
@@ -72,7 +72,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       if (data.session?.user.id) maybeClaimOrphans(data.session.user.id);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      // OM60 review — a session that ends on its own (refresh token expired
+      // or revoked) never goes through signOut() below; clear here too.
+      if (shouldClearOnAuthEvent(event)) clearOfflineData();
       setSession(s);
       if (s?.user.id) maybeClaimOrphans(s.user.id);
     });
@@ -83,6 +86,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    // OM60 review — signing out deletes ticks that never reached the server:
+    // say how many and let the shopper go online first instead.
+    if (typeof window !== "undefined" && !confirmSignOut((m) => window.confirm(m))) return;
     // OM60 — the cached shopping list and any queued ticks belong to this
     // account; a shared phone must not show them to the next person.
     clearOfflineData();

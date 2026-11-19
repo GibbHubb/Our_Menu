@@ -25,6 +25,7 @@
 
 import { supabase } from './supabaseClient';
 import { canonicaliseIngredient } from './ingredients';
+import { classifyWriteError, type WriteResult } from './offline';  // OM60 review
 import {
     parseIngredient, scale, toBaseAmount, formatAmount,
     type ParsedIngredient, type UnitFamily,
@@ -429,15 +430,17 @@ export async function getTicks(): Promise<TickState> {
 }
 
 /** OM60 — resolves true only when the tick landed, so a failure can be queued. */
-export async function setTick(lineKey: string, checked: boolean): Promise<boolean> {
+export async function setTick(lineKey: string, checked: boolean): Promise<WriteResult> {
     // `updated_at` is deliberately NOT sent: migration 024 has Postgres stamp
     // it. The client used to write its own clock into the column the timeout
     // then measured, which made the whole server-clock exercise circular.
-    const { error } = await supabase
+    const { error, status } = await supabase
         .from('shopping_ticks')
         .upsert({ line_key: lineKey, checked }, { onConflict: 'household_id,line_key' });
-    if (error) { console.error('setTick:', error); return false; }
-    return true;
+    if (error) console.error('setTick:', error);
+    // OM60 review — not just ok/failed: the offline queue retries a network
+    // failure, but must drop (and say so) a write the server will always refuse.
+    return classifyWriteError(error ? { status, code: error.code } : null);
 }
 
 /**

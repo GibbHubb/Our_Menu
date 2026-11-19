@@ -49,14 +49,14 @@ describe('flushTicks', () => {
         for (let i = 1; i <= 5; i++) enqueueTick('u', `extra:${i}`, true);
         const sent: string[] = [];
         const res = await flushTicks('u', async (k) => { sent.push(k); return true; });
-        expect(res).toEqual({ landed: 5, remaining: 0, failed: false });
+        expect(res).toEqual({ landed: 5, remaining: 0, failed: false, dropped: [] });
         expect(sent).toHaveLength(5);
         expect(pendingTicks('u')).toEqual([]);
     });
     it('stops at the first failure and keeps it and everything after it', async () => {
         for (let i = 1; i <= 4; i++) enqueueTick('u', `extra:${i}`, true);
         const res = await flushTicks('u', async (k) => k !== 'extra:3');
-        expect(res).toEqual({ landed: 2, remaining: 2, failed: true });
+        expect(res).toEqual({ landed: 2, remaining: 2, failed: true, dropped: [] });
         expect(pendingTicks('u').map((t) => t.key)).toEqual(['extra:3', 'extra:4']);
     });
     it('a send that throws counts as a failure, not a crash', async () => {
