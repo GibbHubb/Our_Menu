@@ -28,8 +28,20 @@ import AppShell from "@/components/AppShell";  // OM43
 import { aisleFor, AISLE_ORDER, AISLE_LABEL, AISLE_EMOJI, type Aisle } from "@/lib/aisles";  // OM45
 import { ErrorState } from "@/components/StateViews";  // OM59
 import {
-    applyPending, enqueueTick, flushTicks, pendingTicks, readListCache, saveListCache, useOnline,
+    applyPending, flushTicks, formatSavedAt, pendingTicks, pruneTicks, readListCache, recordTick,
+    retryDelayMs, rowVersion, saveListCache, useOnline, MAX_TICK_AGE_MS, type DroppedTick, type DropReason,
 } from "@/lib/offline";  // OM60
+
+// OM60 review — a dropped tick is said on screen, with why.
+const DROP_REASON: Record<DropReason, string> = {
+    expired: `ticked over ${Math.round(MAX_TICK_AGE_MS / 3_600_000)} hours ago`,
+    removed: "no longer on the list",
+    changed: "changed on the list since you ticked it",
+    refused: "the server wouldn't take it",
+};
+
+/** `extraTickKey(id) -> rowVersion(row)`: what a queued tick is checked against before replay. */
+const versionsOf = (rows: ListRow[]) => new Map(rows.map((r) => [extraTickKey(r.id), rowVersion(r)]));
 
 const AUTO_FINISH_MINUTES = Math.round(AUTO_FINISH_MS / 60_000);
 
@@ -75,6 +87,19 @@ export default function ShoppingPage() {
     const online = useOnline();
     const uid = user?.id ?? null;
     const flushing = useRef(false);
+    // OM60 review — live writes in flight per line. A flush never starts while
+    // one is in flight, and a tap on a line already in flight is queued, so a
+    // queued state and a live state can never race each other to the server.
+    const inflight = useRef(new Map<string, number>());
+    const flushAgain = useRef(false);
+    // Failed flushes in a row while the browser says online: the retry back-off.
+    const [flushFailures, setFlushFailures] = useState(0);
+    // Ticks that were given up on: shown until dismissed, never silently lost.
+    const [droppedTicks, setDroppedTicks] = useState<DroppedTick[]>([]);
+    const noteDropped = useCallback((d: DroppedTick[]) => {
+        if (d.length) setDroppedTicks((cur) => [...cur, ...d]);
+    }, []);
+    const flushRef = useRef<() => Promise<void>>(async () => {});
 
     // Every setState happens after the await: touching state synchronously in
     // the effect below trips react-hooks/set-state-in-effect, and the page
@@ -85,6 +110,7 @@ export default function ShoppingPage() {
         const fromCache = (): boolean => {
             const cache = uid ? readListCache(uid) : null;
             if (!uid || !cache) return false;
+            noteDropped(pruneTicks(uid));  // expired ticks are not shown as ticked
             setRows((cur) => (cur.length ? cur : cache.rows));
             setTicks((cur) => (cur.size ? cur : applyPending(new Set(cache.ticks), pendingTicks(uid))));
             setLastTickAt((cur) => cur ?? (cache.lastAt ? new Date(cache.lastAt) : null));
@@ -103,14 +129,21 @@ export default function ShoppingPage() {
             // The auto-finish measures minutes, so it measures them against the
             // server's clock rather than this device's. Cheap and cached.
             const [l, t] = await Promise.all([getList(), getTicks(), syncServerClock()]);
-            // OM60 — ticks still waiting to be sent stay ticked on screen.
+            // OM60 — ticks still waiting to be sent stay ticked on screen,
+            // unless they expired or their line left the list or changed.
+            if (uid) noteDropped(pruneTicks(uid, { current: versionsOf(l) }));
             const shown = uid ? applyPending(t.keys, pendingTicks(uid)) : t.keys;
             setRows(l);
             setTicks(shown);
             setLastTickAt(t.lastAt);
             setLoadError(false);
             setCachedAt(null);
-            if (uid) { saveListCache(uid, l, shown, t.lastAt); setPending(pendingTicks(uid).length); }
+            if (uid) {
+                saveListCache(uid, l, shown, t.lastAt);
+                setPending(pendingTicks(uid).length);
+                // OM60 review — the server answered, so try what is queued.
+                if (pendingTicks(uid).length) queueMicrotask(() => { void flushRef.current(); });
+            }
         } catch (e) {
             // OM59 — getList/getTicks throw on a fetch failure now. Leave
             // whatever rows/ticks were already on screen alone; the render
@@ -122,21 +155,40 @@ export default function ShoppingPage() {
         } finally {
             setLoading(false);
         }
-    }, [uid]);
+    }, [uid, noteDropped]);
 
     // OM60 — replay queued ticks. Runs when the browser says it is back online,
-    // when the app comes back to the foreground, and before the first load.
+    // when the app comes back to the foreground or gets focus, before the first
+    // load, after any write or load that reached the server, and on a back-off
+    // timer while anything is queued (the one-bar case: `online` never fires).
     const flush = useCallback(async () => {
-        if (!uid || flushing.current || !pendingTicks(uid).length) return;
+        if (!uid || !pendingTicks(uid).length || !navigator.onLine) return;
+        let busyNow = flushing.current;
+        for (const n of inflight.current.values()) if (n > 0) busyNow = true;
+        if (busyNow) { flushAgain.current = true; return; }
         flushing.current = true;
+        flushAgain.current = false;
+        let res;
         try {
-            const res = await flushTicks(uid, setTick);
-            setPending(res.remaining);
-            if (res.landed) { announceListChanged(); await load(); }
+            // A fresh read first: nothing is replayed onto a line that has
+            // left the list or changed since it was ticked.
+            let current: Map<string, string>;
+            try { current = versionsOf(await getList()); } catch {
+                setFlushFailures((n) => n + 1);
+                return;
+            }
+            res = await flushTicks(uid, setTick, { current });
         } finally {
             flushing.current = false;
         }
-    }, [uid, load]);
+        setPending(res.remaining);
+        noteDropped(res.dropped);
+        setFlushFailures((n) => (res.failed ? n + 1 : 0));
+        if (res.landed || res.dropped.length) { announceListChanged(); await load(); }
+        // Ticks tapped while this flush ran were queued behind it.
+        if (!res.failed && flushAgain.current) void flushRef.current();
+    }, [uid, load, noteDropped]);
+    useEffect(() => { flushRef.current = flush; }, [flush]);
 
     useEffect(() => {
         if (!uid) return;
@@ -144,13 +196,29 @@ export default function ShoppingPage() {
         // Coming back to the app: send what is queued, then re-read the list
         // (the other shopper may have changed it; offline, this lands on the cache).
         const onVisible = () => { if (document.visibilityState === "visible") void flush().then(load); };
+        const onFocus = () => { void flush(); };
         window.addEventListener("online", onOnline);
+        window.addEventListener("focus", onFocus);
         document.addEventListener("visibilitychange", onVisible);
         return () => {
             window.removeEventListener("online", onOnline);
+            window.removeEventListener("focus", onFocus);
             document.removeEventListener("visibilitychange", onVisible);
         };
     }, [uid, flush, load]);
+
+    // OM60 review — retry while the browser still says online: 5 s, doubling to
+    // 60 s per failed attempt, reset by a flush that gets through. Re-armed by
+    // every change to `pending`/`flushFailures`, so it stops when the queue is empty.
+    // An interval, not a one-shot timeout: a fire that lands while a send is in
+    // flight makes flush() bail without changing `pending`/`flushFailures`, and a
+    // one-shot timer would then never re-arm (review 2026-11-17). flush() already
+    // refuses to overlap, so a fire during a busy send is a no-op.
+    useEffect(() => {
+        if (!uid || !online || pending === 0) return;
+        const timer = setInterval(() => { void flush(); }, retryDelayMs(flushFailures));
+        return () => clearInterval(timer);
+    }, [uid, online, pending, flushFailures, flush]);
 
     useEffect(() => {
         if (authLoading) return;
@@ -187,15 +255,31 @@ export default function ShoppingPage() {
         setTrip(null);                         // a new tick means a new trip
         // OM60 — a tick that cannot reach the server is queued, not dropped.
         // It used to be a console.error nobody on a phone could see.
-        let landed = false;
-        if (navigator.onLine) {
-            try { landed = await setTick(key, next.has(key)); } catch { landed = false; }
+        if (!uid) return;                      // signed out: the page is redirecting
+        const checked = next.has(key);
+        const busy = flushing.current || (inflight.current.get(key) ?? 0) > 0;
+        inflight.current.set(key, (inflight.current.get(key) ?? 0) + 1);
+        let outcome: Awaited<ReturnType<typeof recordTick>>;
+        try {
+            outcome = await recordTick(uid, key, checked, { ver: rowVersion(row), label: row.label }, {
+                online: navigator.onLine, busy, send: setTick,
+            });
+        } finally {
+            const n = (inflight.current.get(key) ?? 1) - 1;
+            if (n > 0) inflight.current.set(key, n); else inflight.current.delete(key);
         }
-        if (uid) {
-            if (!landed) enqueueTick(uid, key, next.has(key));
+        if (outcome === "refused") {
+            // The server will never take it (left the household, no access):
+            // put the line back as it was and say so, rather than queue forever.
+            setTicks((cur) => { const s = new Set(cur); if (checked) s.delete(key); else s.add(key); return s; });
+            noteDropped([{ key, checked, label: row.label, reason: "refused" }]);
+        } else {
             saveListCache(uid, rows, next, new Date(serverNow()));
-            setPending(pendingTicks(uid).length);
         }
+        setPending(pendingTicks(uid).length);
+        // Anything queued (this tap, or taps that waited on this write) goes
+        // now; flush() itself bails out while any other write is in flight.
+        if (navigator.onLine && pendingTicks(uid).length) void flush();
         announceListChanged();                 // keep the nav badge honest
     };
 
@@ -367,12 +451,32 @@ export default function ShoppingPage() {
                     <div role="status" className="flex items-start gap-3 bg-sky-50 border border-sky-200 text-sky-900 rounded-xl px-4 py-2.5 text-sm">
                         <WifiOff className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
                         <span>
-                            {!online ? "Offline" : cachedAt ? "Can’t reach the server" : "Back online"}
+                            {!online ? "Offline" : cachedAt ? "Can’t reach the server" : ""}
                             {cachedAt
-                                ? ` — showing your last saved list (saved ${new Date(cachedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}).`
-                                : !online ? (rows.length ? " — the list below is what you last saw." : " — and nothing is saved on this phone yet.") : "."}
-                            {pending > 0 && ` ${pending} tick${pending === 1 ? "" : "s"} saved on this phone, sent when you’re back online.`}
+                                ? ` — showing your last saved list (saved ${formatSavedAt(cachedAt)}).`
+                                : !online ? (rows.length ? " — the list below is what you last saw." : " — and nothing is saved on this phone yet.") : ""}
+                            {/* OM60 review — truthful while the browser says online: it IS online, and retrying. */}
+                            {pending > 0 && `${!online || cachedAt ? " " : ""}${pending} tick${pending === 1 ? "" : "s"} saved on this phone, ${online ? `still trying to send ${pending === 1 ? "it" : "them"}.` : "sent when you’re back online."}`}
                         </span>
+                    </div>
+                )}
+
+                {/* OM60 review — a tick given up on is never silent. */}
+                {droppedTicks.length > 0 && (
+                    <div role="status" className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-sm text-amber-900">
+                        <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" aria-hidden="true" />
+                        <p className="flex-1">
+                            {droppedTicks.length === 1 ? "1 tick wasn’t sent and has been dropped" : `${droppedTicks.length} ticks weren’t sent and have been dropped`}
+                            {": "}
+                            {droppedTicks.map((d) => `${d.label ?? "a line"} (${DROP_REASON[d.reason]})`).join(", ")}.
+                            {" "}Check the list and tick again what you have.
+                        </p>
+                        <button
+                            onClick={() => setDroppedTicks([])}
+                            className="p-1 text-amber-600/60 hover:text-amber-900" aria-label="Dismiss"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
                     </div>
                 )}
 

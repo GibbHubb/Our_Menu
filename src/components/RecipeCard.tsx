@@ -46,9 +46,14 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
             className="break-inside-avoid mb-4 inline-block w-full"
             style={{ transform: "translateZ(0)" }}
         >
+            {/* OM58 review — `group` lives on this wrapper, not on the <a>, so
+                the Edit button can sit BESIDE the link instead of inside it
+                (a <button> inside an <a> is nested-interactive: one Tab stop
+                swallowing another, and an ambiguous click target). */}
+            <div className="group relative">
             <Link
                 href={`/recipe/${recipe.id}`}
-                className="group relative bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all border border-stone-100 flex flex-col block"
+                className="relative bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all border border-stone-100 flex flex-col block"
             >
                 {/* Image Area */}
                 <div className="aspect-[4/3] bg-stone-100 relative overflow-hidden">
@@ -106,30 +111,6 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                         </div>
                     )}
 
-                    <div className="absolute top-3 right-3 flex gap-2">
-                        {/* Edit Button - Needs preventDefault to not trigger header link */}
-                        {onEdit && (
-                            <button
-                                onClick={(e) => {
-                                    e.preventDefault(); // Stop Link navigation
-                                    e.stopPropagation();
-                                    onEdit(recipe);
-                                }}
-                                className="bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white hover:text-amber-600 z-10"
-                                title="Edit Recipe"
-                                aria-label="Edit recipe"
-                            >
-                                <Pencil className="w-3 h-3" />
-                            </button>
-                        )}
-
-                        {/* Link Indicator */}
-                        {recipe.link && (
-                            <div className="bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Link2 className="w-3 h-3 text-stone-900" />
-                            </div>
-                        )}
-                    </div>
                 </div>
 
                 {/* Content */}
@@ -162,6 +143,35 @@ export default function RecipeCard({ recipe, onEdit }: RecipeCardProps) {
                     )}
                 </div>
             </Link>
+
+            {/* OM58 review — overlaid on the image's top-right corner, outside
+                the link. The row ignores the pointer so a click on the corner
+                (or on the decorative link badge) still opens the recipe; only
+                the Edit button takes clicks. Both show on hover AND whenever
+                focus is anywhere in the card (group-focus-within), and the
+                button itself on focus-visible: a hover-only control used to be
+                a Tab stop drawn at opacity 0. */}
+            <div className="absolute top-3 right-3 flex gap-2 pointer-events-none z-10">
+                {onEdit && (
+                    <button
+                        type="button"
+                        onClick={() => onEdit(recipe)}
+                        className="pointer-events-auto bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 transition-opacity hover:bg-white hover:text-amber-600"
+                        title="Edit Recipe"
+                        aria-label={`Edit ${recipe.title}`}
+                    >
+                        <Pencil className="w-3 h-3" aria-hidden="true" />
+                    </button>
+                )}
+
+                {/* Link Indicator */}
+                {recipe.link && (
+                    <div aria-hidden="true" className="bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                        <Link2 className="w-3 h-3 text-stone-900" />
+                    </div>
+                )}
+            </div>
+            </div>
         </motion.div>
     );
 }
