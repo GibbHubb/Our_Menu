@@ -38,7 +38,7 @@ const ALIASES: Record<string, string> = {
   'potatoes':  'potato',
   'leaves':    'leaf',
   'chillies':  'chilli',
-  'chilies':   'chili',
+  'chilies':   'chilli',
   // common compound trims
   'chicken breast':  'chicken',
   'chicken breasts': 'chicken',
@@ -69,11 +69,26 @@ const OES_WORDS = new Set([
 // Word-level, so "red chillies" and "bay leaves" are covered too.
 const IRREGULAR_PLURALS: Record<string, string> = {
   chillies: 'chilli',
-  chilies:  'chili',
+  chilies:  'chilli',
   leaves:   'leaf',
   loaves:   'loaf',
   halves:   'half',
 };
+
+// OM67 — one thing to buy, several spellings. Applied to each word AFTER
+// singularising, so "chili", "chilis", "chilies" and "chillies" all land on
+// the Australian "chilli" (the key OM66 already uses). "chilly" is the key the
+// pre-OM66 suffix rule produced from "chillies"; mapping it here means a line
+// typed that way still merges. Word-level, so "chili flakes" -> "chilli flake".
+const SPELLING_VARIANTS: Record<string, string> = {
+  chili:  'chilli',
+  chilly: 'chilli',
+};
+
+function normaliseWord(word: string): string {
+  const s = singularise(word);
+  return SPELLING_VARIANTS[s] ?? s;
+}
 
 function singularise(word: string): string {
   if (IRREGULAR_PLURALS[word]) return IRREGULAR_PLURALS[word];
@@ -127,7 +142,7 @@ export function canonicaliseIngredient(input: string): string {
   if (ALIASES[unsingular]) return ALIASES[unsingular];
 
   // Singularise each word, then re-join
-  const joined = kept.map(singularise).join(' ').trim();
+  const joined = kept.map(normaliseWord).join(' ').trim();
   if (!joined) return '';
 
   // Alias lookup (full-string only, no partial)

@@ -134,9 +134,12 @@ with sync_playwright() as p:
     page.goto(f"{APP}/shopping", wait_until="networkidle")
     page.wait_for_timeout(2500)
     body = page.inner_text("body")
+    # OM67: the detail reports the same locator the assertion checks. A
+    # placeholder is an attribute, never in inner_text, so the old detail
+    # said "placeholder missing" on every passing run.
+    n_add = page.get_by_placeholder(re.compile("add something else", re.I)).count()
     v.check("/shopping renders its own chrome (add-extra input present)",
-            page.get_by_placeholder(re.compile("add something else", re.I)).count() > 0,
-            "placeholder found" if "Add something else" in body else "placeholder missing")
+            n_add > 0, f"{n_add} input(s) with the 'add something else' placeholder")
     v.check("/shopping does not show the ErrorBoundary screen",
             "Something went wrong" not in body, body[:120])
 

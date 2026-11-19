@@ -41,7 +41,7 @@ describe('canonicaliseIngredient — irregular plurals (OM66)', () => {
     // One case per irregular plural in IRREGULAR_PLURALS / ALIASES.
     it.each([
         ['2 chillies', 'chilli'], ['1 chilli', 'chilli'], ['red chillies', 'red chilli'],
-        ['3 chilies', 'chili'], ['bay leaves', 'bay leaf'], ['curry leaves', 'curry leaf'],
+        ['3 chilies', 'chilli'], ['bay leaves', 'bay leaf'], ['curry leaves', 'curry leaf'],
         ['2 loaves bread', 'loaf bread'], ['tomatoes', 'tomato'], ['potatoes', 'potato'],
     ])('%s -> %s', (input, key) => {
         expect(k(input)).toBe(key);
@@ -49,6 +49,13 @@ describe('canonicaliseIngredient — irregular plurals (OM66)', () => {
     it('"1 chilli" and "2 chillies" are one thing to buy', () => {
         expect(ingredientsMatch('1 chilli', '2 chillies, finely chopped')).toBe(true);
         expect(ingredientsMatch('bay leaf', '3 bay leaves')).toBe(true);
+    });
+    it('OM67: every spelling of chilli is one key', () => {
+        const keys = ['chillies', 'chilies', 'chilli', 'chili', 'chilly', '2 chilis']
+            .map((s) => k(s));
+        expect(new Set(keys)).toEqual(new Set(['chilli']));
+        expect(ingredientsMatch('3 chilies', '1 chilli')).toBe(true);
+        expect(k('red chili flakes')).toBe('red chilli flake');
     });
     it('CONTROL: chillies is not "chilly" (the pre-OM66 key)', () => {
         rejectWrong(k('chillies'), 'chilly');
