@@ -208,9 +208,20 @@ def main() -> int:
         # 8. Sign out clears this account's cache and queue.
         enq = f"() => localStorage.setItem({json.dumps(Q)}, JSON.stringify([{{key:'extra:x',checked:true,at:'t'}}]))"
         page.evaluate(enq)
-        page.once("dialog", lambda d: d.accept())   # OM47's "are you sure?"
+        # Two dialogs now: OM47's "are you sure?", then OM60's review warning that
+        # the seeded tick has not reached the server. Accept both and see the second.
+        seen: list[str] = []
+
+        def accept(d) -> None:
+            seen.append(d.message)
+            d.accept()
+
+        page.on("dialog", accept)
         page.click("button[aria-label='Sign out']")
         page.wait_for_timeout(1500)
+        page.remove_listener("dialog", accept)
+        ok &= check("sign-out: warns that unsent ticks will be deleted",
+                    any("reached the server" in m for m in seen), seen)
         left = page.evaluate("() => Object.keys(localStorage).filter(k => k.startsWith('om60:'))")
         ok &= check("sign-out: no om60 keys left in localStorage", left == [], left)
 
