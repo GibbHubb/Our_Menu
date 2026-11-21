@@ -53,7 +53,10 @@ export default function MasonryGrid({ recipes, onSeed, onEdit, onClick, error, o
         );
     }
 
-    if (recipes.length === 0 && signedOut) {
+    // OM70 — a guest now has the demo kitchen, so the wall only shows when
+    // there is truly nothing to show (no demo either); a guest whose filters
+    // match nothing falls through to "Nothing matches those filters" below.
+    if (recipes.length === 0 && signedOut && !((totalCount ?? 0) > 0)) {
         return (
             <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
                 <div className="bg-stone-100 p-6 rounded-full mb-6">
