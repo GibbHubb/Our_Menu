@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/lib/AuthContext';  // OM70
 import { apiFetch } from '@/lib/apiFetch';
 import type { Recipe } from '@/lib/types';
 import { useAiEnabled } from '@/lib/useAiEnabled';  // OM35(c)
@@ -27,6 +29,14 @@ export default function MealPlanPage() {
     const [loading, setLoading] = useState(false);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState('');
+
+    // OM70 — meal plans are built from the household's recipes: a signed-out
+    // visitor goes to log in rather than seeing a form whose every action fails.
+    const { user, loading: authLoading } = useAuth();
+    const router = useRouter();
+    useEffect(() => {
+        if (!authLoading && !user) router.replace('/login?next=/meal-plan');
+    }, [authLoading, user, router]);
 
     // Fetch recipes for matched plan days (for PDF shopping list)
     useEffect(() => {

@@ -8,15 +8,29 @@ import { CATEGORIES } from "@/lib/constants";
 import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Pencil, Sparkles, Loader2, AlertTriangle, AlertCircle, X, ChefHat } from "lucide-react";
 import { logCook, formatLastCooked } from "@/lib/cookLog";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, notFound } from "next/navigation";
 import EditRecipeModal from "@/components/EditRecipeModal";
+import DemoRecipeView from "@/components/DemoRecipeView";  // OM70
+import { getDemoRecipe, isDemoId } from "@/lib/demo";  // OM70
 import ShoppingListComp from "@/components/ShoppingList";
 import IngredientList from "@/components/IngredientList";
 import { ReceiptScanner } from "@/components/ReceiptScanner";
 import { SEASON_COLOR, SEASON_LABEL, type Season } from "@/lib/seasons";
 
+// OM70 — demo ids (`demo-…`) render a read-only view built from code, so the
+// real page below, with its Supabase reads and every write action, never runs
+// for a demo recipe. Any other id goes to the real page exactly as before.
 export default function RecipePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
+    if (isDemoId(id)) {
+        const demo = getDemoRecipe(id);
+        if (!demo) notFound();
+        return <DemoRecipeView recipe={demo} />;
+    }
+    return <RecipeDetail id={id} />;
+}
+
+function RecipeDetail({ id }: { id: string }) {
     const router = useRouter();
 
     const [recipe, setRecipe] = useState<Recipe | null>(null);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { Category, Recipe } from "@/lib/types";
 import { supabase } from "@/lib/supabaseClient";
 import { apiFetch } from "@/lib/apiFetch";
@@ -14,6 +14,7 @@ import ChatAgent from "./ChatAgent";
 import CollectionBar from "./CollectionBar";
 import { Plus, Wand2, Sparkles, X } from "lucide-react";
 import { INITIAL_RECIPES } from "@/lib/initialData";
+import { DEMO_RECIPES } from "@/lib/demo";  // OM70
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { currentSeason, isInSeason, SEASON_LABEL, type Season } from "@/lib/seasons";
@@ -50,15 +51,23 @@ function MenuContent() {
     const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
     const [membershipMap, setMembershipMap] = useState<Record<string, Set<string>>>({});
 
+    // OM70 — bumped every time the signed-in identity changes. A fetch that
+    // started under an older identity must not land: otherwise signing out
+    // while the real recipes are still loading would paint the household's
+    // private menu over the demo kitchen.
+    const loadSeqRef = useRef(0);
+
     const refreshCollections = async () => {
+        const seq = loadSeqRef.current;
         const [cols, mems] = await Promise.all([getCollections(), getCollectionMemberships()]);
+        if (seq !== loadSeqRef.current) return;  // OM70: identity changed mid-flight
         setCollections(cols);
         setMembershipMap(mems);
     };
 
-    useEffect(() => {
-        refreshCollections();
-    }, []);
+    // OM70 — collections and recipes now load once auth has resolved (see the
+    // effect after fetchRecipes): a signed-out visitor gets the demo kitchen and
+    // never queries Supabase at all.
 
     const handleCreateCollection = async (name: string) => {
         await createCollection(name);
@@ -89,6 +98,12 @@ function MenuContent() {
     // OM38 — `authLoading` keeps the signed-out empty state from flashing while
     // getSession() is still in flight.
     const { user, loading: authLoading } = useAuth();
+    // OM70 — a signed-out visitor sees the demo kitchen: sample recipes served
+    // from code, read-only, no Supabase reads or writes.
+    const isGuest = !authLoading && !user;
+    // Also true for the one render between auth resolving and the effect
+    // swapping the list, so demo cards never flash an edit pencil or the chat.
+    const showingDemo = isGuest || recipes === DEMO_RECIPES;
 
     // OM49 — the "Cookable now" filter is gone. It answered "what can I cook
     // with what is in the cupboard", which needs the pantry to be a record of
@@ -154,12 +169,15 @@ function MenuContent() {
 
     // Fetch Recipes
     const fetchRecipes = async () => {
+        const seq = loadSeqRef.current;
         setLoading(true);
         setError(false);
         const { data, error } = await supabase
             .from("recipes")
             .select("*")
             .order("created_at", { ascending: false });
+        // OM70: the user signed out (or switched) while this was in flight.
+        if (seq !== loadSeqRef.current) return;
 
         if (error) {
             // OM59 — the raw Postgres error stays in the console; MasonryGrid
@@ -172,9 +190,31 @@ function MenuContent() {
         setLoading(false);
     };
 
+    // OM70 — wait for auth before touching data. Signed in: the household's
+    // real recipes and collections, as before. Signed out: the demo kitchen,
+    // with no request to Supabase. Keyed on the user id so signing in or out
+    // swaps between the two without a reload.
     useEffect(() => {
-        fetchRecipes();
-    }, []);
+        if (authLoading) return;
+        loadSeqRef.current += 1;  // any fetch still in flight is now stale
+        setSelectedCollectionId(null);
+        if (user) {
+            // Clear first, so demo recipes (or another account's) never sit
+            // under a signed-in user, e.g. if this fetch fails.
+            setRecipes([]);
+            setCollections([]);
+            setMembershipMap({});
+            fetchRecipes();
+            refreshCollections();
+        } else {
+            setRecipes(DEMO_RECIPES);
+            setCollections([]);
+            setMembershipMap({});
+            setError(false);
+            setLoading(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [authLoading, user?.id]);
 
     // Filter Logic
     const filteredRecipes = recipes.filter((recipe) => {
@@ -362,7 +402,30 @@ function MenuContent() {
                 LLM key, because every query it accepted returned a 503. The
                 plain title/ingredient search in the header still works and is
                 what people were actually using. */}
-            {aiEnabled === true && (
+            {/* OM70 — the demo-kitchen banner: says what a guest is looking
+                at and how to get to their own menu. */}
+            {isGuest && (
+                <div className="max-w-7xl mx-auto px-4 pt-4">
+                    <div
+                        role="status"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3"
+                    >
+                        <p className="text-sm text-stone-700">
+                            <span className="font-semibold text-stone-900">You&apos;re looking at a demo kitchen.</span>{" "}
+                            Browse the sample recipes, or tap the wand and let us pick dinner. Log in to see and
+                            save your own household&apos;s menu.
+                        </p>
+                        <Link
+                            href="/login"
+                            className="shrink-0 self-start sm:self-auto px-5 py-2 bg-stone-900 text-white rounded-full text-sm font-medium hover:bg-stone-800"
+                        >
+                            Log in
+                        </Link>
+                    </div>
+                </div>
+            )}
+
+            {aiEnabled === true && !isGuest && (
             <div className="max-w-7xl mx-auto px-4 pt-4">
                 <form onSubmit={handleSemanticSearch} className="flex gap-2">
                     <div className="relative flex-1">
@@ -423,12 +486,14 @@ function MenuContent() {
             {/* OM49 — the Cookable-now chip was here. The Pantry link stays: it
                 is the "then the house" half of the shop. */}
             <div className="max-w-7xl mx-auto px-4 pt-3 flex items-center gap-2 flex-wrap">
-                <Link
-                    href="/pantry"
-                    className="text-xs text-stone-500 hover:text-stone-900 underline underline-offset-2"
-                >
-                    Manage pantry →
-                </Link>
+                {!isGuest && (
+                    <Link
+                        href="/pantry"
+                        className="text-xs text-stone-500 hover:text-stone-900 underline underline-offset-2"
+                    >
+                        Manage pantry →
+                    </Link>
+                )}
 
                 {/* OM13 — In-season-now filter */}
                 <button
@@ -474,7 +539,8 @@ function MenuContent() {
                 </p>
             )}
 
-            {/* OM9 — Collections filter bar */}
+            {/* OM9 — Collections filter bar. OM70: household data, so not for guests. */}
+            {!isGuest && (
             <CollectionBar
                 collections={collections}
                 selectedId={selectedCollectionId}
@@ -496,6 +562,7 @@ function MenuContent() {
                     await buildCookbookPDF(name, scoped);
                 }}
             />
+            )}
 
             <div>
                 {loading ? (
@@ -507,8 +574,9 @@ function MenuContent() {
                         recipes={semanticResults !== null && semanticResults.length > 0
                             ? semanticResults
                             : filteredRecipes}
-                        onSeed={handleSeedData}
-                        onEdit={handleOpenEdit}
+                        /* OM70 — no seed button and no edit pencil for guests. */
+                        onSeed={showingDemo ? undefined : handleSeedData}
+                        onEdit={showingDemo ? undefined : handleOpenEdit}
                         error={error}
                         onRetryError={fetchRecipes}
                         signedOut={!authLoading && !user}
@@ -530,7 +598,15 @@ function MenuContent() {
                 </button>
 
                 <button
-                    onClick={() => setIsAddOpen(true)}
+                    onClick={() => {
+                        // OM70 — a guest can't save, so say so instead of opening
+                        // a form that would fail on submit.
+                        if (isGuest) {
+                            toast("This is a demo kitchen. Log in to add your own recipes.", { variant: "info" });
+                            return;
+                        }
+                        setIsAddOpen(true);
+                    }}
                     className="p-4 bg-stone-900 text-white rounded-full shadow-lg hover:bg-stone-800 transition-transform hover:scale-105"
                     title="Add Recipe"
                     aria-label="Add recipe"
@@ -560,7 +636,8 @@ function MenuContent() {
                 recipes={filteredRecipes}
             />
 
-            <ChatAgent />
+            {/* OM70 — the chat spends model quota and its route needs a session. */}
+            {!showingDemo && <ChatAgent />}
         </AppShell>
     );
 }

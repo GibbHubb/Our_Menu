@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/AuthContext";  // OM70
 import { Check, Loader2, Plus, ShoppingCart, Sparkles, Trash2 } from "lucide-react";
 import AppShell from "@/components/AppShell";  // OM43
 import { ErrorState } from "@/components/StateViews";  // OM59
@@ -19,6 +21,10 @@ import { canonicaliseIngredient } from "@/lib/ingredients";
 import { announceListChanged, copyLinesToList, shoppingKey } from "@/lib/shopping";  // OM49
 
 export default function PantryPage() {
+  // OM70 — the pantry is household data: a signed-out visitor goes to log in
+  // (as /shopping already does) and nothing is fetched or written for them.
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [items, setItems] = useState<PantryItem[]>([]);
   const [loading, setLoading] = useState(true);
   // OM59 — getPantryItems() used to swallow a fetch failure and return [],
@@ -58,7 +64,12 @@ export default function PantryPage() {
     }
   };
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) { router.replace("/login?next=/pantry"); return; }
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user?.id]);
 
   const handleAdd = async () => {
     const name = single.trim();
