@@ -41,12 +41,14 @@ schema of a Supabase project shared with other apps (see `data-model.md`).
 | `src/lib/apiFetch.ts` | the one place that attaches the caller's access token to `/api/*` calls | fetch wrapper |
 | `src/lib/supabaseServer.ts` | `createRequestClient(req)` (anon key + caller JWT), `getRequestUser(req)` (verifies the token with Supabase Auth), `createAdminClient()` (service role, batch jobs only) | supabase-js |
 | Route handlers (`src/app/api/*`) | `chat`, `substitutions`, `nutrition/[id]`, `meal-plan/{generate,save}`, `receipts/scan`, `import-url`, `recipes/{[id],embed,search}`, `ai-status`, `health`, `keepalive`, `client-error` | Next route handlers |
+| `src/lib/embeddings.ts` | Gemini `embedContent` for semantic search (OM68) | fetch |
 | `src/lib/llm.ts` | which LLM the app talks to: Gemini free tier through its OpenAI-compatible endpoint (`GEMINI_API_KEY`, `LLM_MODEL`) | fetch |
 | `src/lib/offline.ts` | shopping list cache-on-read and tick queue-on-write when the signal drops; no service worker on purpose | localStorage |
 | Database | tables, RLS, household stamping trigger, SECURITY DEFINER household RPCs | Postgres on Supabase, `supabase/migrations/` |
 
-`recipes/embed` and `recipes/search` still call OpenAI embeddings and are inert without `OPENAI_API_KEY`, which this
-project does not set (free tier only).
+`recipes/embed` and `recipes/search` use Gemini embeddings (`src/lib/embeddings.ts`: `gemini-embedding-001` at 1536
+dimensions to fit `recipe_embeddings.embedding vector(1536)`, `GEMINI_API_KEY`). OM68 removed the OpenAI SDK and key.
+The semantic search bar is still hidden by the `ai-status` flag, which only checks `ANTHROPIC_API_KEY`.
 
 ## Key flows
 

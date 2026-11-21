@@ -1,9 +1,9 @@
-// Requires: OPENAI_API_KEY in .env.local
-// Requires: 001_recipe_embeddings.sql applied in Supabase (match_recipes RPC)
+// Semantic recipe search (OM1). OM68: embeds the query with Gemini (src/lib/embeddings.ts,
+// GEMINI_API_KEY), then ranks with the match_recipes RPC from migration 001.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createRequestClient } from '@/lib/supabaseServer';
-import OpenAI from 'openai';
+import { embedText, embeddingsConfigured } from '@/lib/embeddings';
 
 export async function POST(req: NextRequest) {
     const { query } = await req.json();
@@ -12,18 +12,17 @@ export async function POST(req: NextRequest) {
     // OM14c — search the caller's own recipes, not the anonymous view.
     const supabase = createRequestClient(req);
 
-    if (!process.env.OPENAI_API_KEY) {
-        return NextResponse.json({ error: 'Semantic search is not configured (OPENAI_API_KEY missing)' }, { status: 503 });
+    if (!embeddingsConfigured()) {
+        return NextResponse.json({ error: 'Semantic search is not configured (GEMINI_API_KEY missing)' }, { status: 503 });
     }
 
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    // Embed the query
-    const embRes = await openai.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: query,
-    });
-    const embedding = embRes.data[0].embedding;
+    let embedding: number[];
+    try {
+        embedding = await embedText(String(query), 'RETRIEVAL_QUERY');
+    } catch (e) {
+        console.error('recipes/search embedding failed:', e);
+        return NextResponse.json({ error: 'Semantic search is unavailable right now.' }, { status: 502 });
+    }
 
     // Call match_recipes RPC
     const { data, error } = await supabase.rpc('match_recipes', {

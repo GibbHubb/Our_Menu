@@ -1,10 +1,9 @@
-// IMPORTANT: Before using this endpoint, run supabase/migrations/001_recipe_embeddings.sql
-// in the Supabase SQL editor to create the recipe_embeddings table and match_recipes function.
-// Also ensure OPENAI_API_KEY is set in .env.local.
+// Batch-embeds the caller's recipes into recipe_embeddings (migration 001, RLS from 025).
+// OM68: Gemini embeddings via src/lib/embeddings.ts (GEMINI_API_KEY), 1536 dims to fit vector(1536).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createRequestClient, getRequestUser } from '@/lib/supabaseServer';
-import OpenAI from 'openai';
+import { embedText, embeddingsConfigured, recipeEmbeddingText } from '@/lib/embeddings';
 
 export async function POST(req: NextRequest) {
     // OM55 — this used the ADMIN client with no auth at all, and returned {id, title} for every
@@ -14,7 +13,9 @@ export async function POST(req: NextRequest) {
     if (!(await getRequestUser(req))) {
         return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 });
     }
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    if (!embeddingsConfigured()) {
+        return NextResponse.json({ error: 'Embeddings are not configured (GEMINI_API_KEY missing)' }, { status: 503 });
+    }
     const supabase = createRequestClient(req);
     // Fetch all recipes
     const { data: recipes, error } = await supabase
@@ -24,22 +25,14 @@ export async function POST(req: NextRequest) {
 
     const results = [];
     for (const recipe of recipes ?? []) {
-        const text = [
-            recipe.title,
-            Array.isArray(recipe.ingredients)
-                ? recipe.ingredients.join(', ')
-                : recipe.ingredients,
-            recipe.instructions,
-        ]
-            .filter(Boolean)
-            .join('\n')
-            .slice(0, 8000); // cap at 8K chars
-
-        const embRes = await openai.embeddings.create({
-            model: 'text-embedding-3-small',
-            input: text,
-        });
-        const embedding = embRes.data[0].embedding;
+        let embedding: number[];
+        try {
+            embedding = await embedText(recipeEmbeddingText(recipe), 'RETRIEVAL_DOCUMENT');
+        } catch (e) {
+            console.error(`recipes/embed failed for ${recipe.id}:`, e);
+            results.push({ id: recipe.id, title: recipe.title, ok: false });
+            continue;
+        }
 
         const { error: upsertErr } = await supabase
             .from('recipe_embeddings')
@@ -50,5 +43,5 @@ export async function POST(req: NextRequest) {
         results.push({ id: recipe.id, title: recipe.title, ok: !upsertErr });
     }
 
-    return NextResponse.json({ embedded: results.length, results });
+    return NextResponse.json({ embedded: results.filter((r) => r.ok).length, results });
 }

@@ -87,7 +87,7 @@ Introduced by **001**; RLS added by **025**.
 |---|---|---|
 | id | uuid PK | |
 | recipe_id | uuid NOT NULL → recipes CASCADE | unique |
-| embedding | vector(1536) | |
+| embedding | vector(1536) | Gemini `gemini-embedding-001`, `outputDimensionality` 1536 (OM68) |
 | embedded_at | timestamptz | default now() |
 
 **RLS:** parented on `recipes`. SELECT when the recipe is readable to the caller (so anon sees public recipes'
