@@ -8,6 +8,7 @@ import {
     embeddingsConfigured,
     recipeEmbeddingText,
 } from '@/lib/embeddings';
+import { rejectWrong } from './control';
 
 const realFetch = globalThis.fetch;
 const realKey = process.env.GEMINI_API_KEY;
@@ -67,6 +68,14 @@ describe('embedText', () => {
     it('rejects a vector of the wrong length rather than writing it to the column', async () => {
         stubFetch(200, { embedding: { values: Array(768).fill(0.1) } });
         await expect(embedText('x', 'RETRIEVAL_DOCUMENT')).rejects.toThrow(/768 values, expected 1536/);
+    });
+
+    it('CONTROL: with no key, embeddings never report as configured', () => {
+        // Goes red under OM54_INVERT_CONTROLS=1, proving this file's assertions
+        // can fail. The known-wrong answer is the bug that would let both routes
+        // call Gemini keyless instead of answering 503: configured === true.
+        delete process.env.GEMINI_API_KEY;
+        rejectWrong(embeddingsConfigured(), true);
     });
 });
 
