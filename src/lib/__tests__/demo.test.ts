@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { DEMO_RECIPES, getDemoRecipe, isDemoId, DEMO_ID_PREFIX } from "../demo";
 import { INITIAL_RECIPES } from "../initialData";
+import { rejectWrong } from "./control";
 
 describe("OM70 demo kitchen", () => {
     it("serves every titled seed recipe", () => {
@@ -45,5 +46,12 @@ describe("OM70 demo kitchen", () => {
         expect(isDemoId(DEMO_RECIPES[0].id)).toBe(true);
         expect(isDemoId("3f2b8c1e-0000-4000-8000-000000000000")).toBe(false);
         expect(isDemoId("")).toBe(false);
+    });
+
+    it("CONTROL: a real (uuid) recipe id is never treated as a demo id", () => {
+        // Goes red under OM54_INVERT_CONTROLS=1, proving this file's assertions
+        // can fail. The known-wrong answer is the bug that would route a
+        // household's real recipe to the demo view: isDemoId(uuid) === true.
+        rejectWrong(isDemoId("3f2b8c1e-0000-4000-8000-000000000000"), true);
     });
 });
