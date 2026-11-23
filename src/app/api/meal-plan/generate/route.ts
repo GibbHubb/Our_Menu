@@ -2,15 +2,38 @@
 // Requires: 002_meal_plans.sql applied in Supabase
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createRequestClient } from '@/lib/supabaseServer';
+import { createRequestClient, getRequestUser } from '@/lib/supabaseServer';
 import { currentSeason } from '@/lib/seasons';
-import { llmConfigured, llmJson } from '@/lib/llm';
+import { llmConfigured, llmFailure, llmJson } from '@/lib/llm';
+
+// A 14-day plan can take Gemini a while; the LLM call itself aborts at 45 s (src/lib/llm.ts).
+export const maxDuration = 60;
+
+const MAX_PLAN_DAYS = 14;
+
+/** Plan length from the request, clamped to 1..MAX_PLAN_DAYS; 7 (the UI default) when missing or junk. */
+function clampPlanDays(raw: unknown): number {
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n)) return 7;
+    return Math.min(MAX_PLAN_DAYS, Math.max(1, n));
+}
 
 export async function POST(req: NextRequest) {
+    // OM73 — signed-in callers only, like the sibling AI routes (OM55): this spends the Gemini quota.
+    if (!(await getRequestUser(req))) {
+        return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 });
+    }
     if (!llmConfigured()) {
         return NextResponse.json({ error: 'Meal plans are not configured (GEMINI_API_KEY missing)' }, { status: 503 });
     }
-    const { pantry, dietary, days } = await req.json();
+    let body: { pantry?: unknown; dietary?: unknown; days?: unknown };
+    try {
+        body = await req.json();
+    } catch {
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+    const { pantry, dietary } = body ?? {};
+    const days = clampPlanDays(body?.days);
 
     // OM14c — read as the caller so recipes and cook_log are their own rows
     // once those tables are user-scoped, not the anonymous view of them.
@@ -78,7 +101,8 @@ Prefer recipes from the library. For days where no library recipe fits, suggest 
         ({ json, raw } = await llmJson({ prompt, maxTokens: 4096 }));
     } catch (err) {
         console.error('[OM73] meal plan LLM call failed:', err);
-        return NextResponse.json({ error: 'Could not reach the meal planner.' }, { status: 502 });
+        const { status, error } = llmFailure(err, 'meal planner');
+        return NextResponse.json({ error }, { status });
     }
 
     const plan = json as { days?: unknown } | undefined;

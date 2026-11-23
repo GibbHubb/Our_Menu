@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createRequestClient } from "@/lib/supabaseServer";
 import { NUTRITION_PROMPT, hashIngredients, parseNutritionResponse } from "@/lib/nutrition";
-import { llmConfigured, llmJson } from "@/lib/llm";
+import { llmConfigured, llmFailure, llmJson } from "@/lib/llm";
 
 const RATE_LIMIT_SECONDS = 60;
 
@@ -69,7 +69,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         }));
     } catch (err) {
         console.error("[OM11] nutrition LLM call failed:", err);
-        return NextResponse.json({ error: "Could not reach the nutrition estimator." }, { status: 502 });
+        const { status, error } = llmFailure(err, "nutrition estimator");
+        return NextResponse.json({ error }, { status });
     }
 
     const parsed = parseNutritionResponse(raw);

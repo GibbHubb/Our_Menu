@@ -26,9 +26,11 @@ function chain(table: string) {
     return c;
 }
 
+// `signedIn` flips per test: the AI routes refuse anonymous callers (OM55, OM73).
+let signedIn = true;
 vi.mock('@/lib/supabaseServer', () => ({
     createRequestClient: () => ({ from: (t: string) => chain(t) }),
-    getRequestUser: async () => ({ id: 'user-1' }),
+    getRequestUser: async () => (signedIn ? { id: 'user-1' } : null),
 }));
 
 import { POST as mealPlan } from '@/app/api/meal-plan/generate/route';
@@ -36,6 +38,7 @@ import { POST as nutrition } from '@/app/api/nutrition/[id]/route';
 import { POST as receipts } from '@/app/api/receipts/scan/route';
 import { POST as substitutions } from '@/app/api/substitutions/route';
 import { GET as aiStatus } from '@/app/api/ai-status/route';
+import { POST as search } from '@/app/api/recipes/search/route';
 
 // ── fetch stub ───────────────────────────────────────────────────────────────
 const realFetch = globalThis.fetch;
@@ -57,6 +60,7 @@ const jsonReq = (url: string, body: unknown) =>
 
 beforeEach(() => {
     process.env.GEMINI_API_KEY = 'test-key';
+    signedIn = true;
     for (const k of Object.keys(db)) delete db[k];
     updates.length = 0;
 });
@@ -104,7 +108,7 @@ describe('POST /api/meal-plan/generate', () => {
 
     it('answers 502 when Gemini errors', async () => {
         db.recipes = { data: [], error: null };
-        stubLlm('', 429);
+        stubLlm('', 500);
         const res = await mealPlan(jsonReq('/api/meal-plan/generate', { days: 3 }));
         expect(res.status).toBe(502);
     });
@@ -115,6 +119,40 @@ describe('POST /api/meal-plan/generate', () => {
         const res = await mealPlan(jsonReq('/api/meal-plan/generate', { days: 3 }));
         expect(res.status).toBe(503);
         expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('answers 401 to an anonymous caller and makes no call', async () => {
+        signedIn = false;
+        const spy = stubLlm('{}');
+        const res = await mealPlan(jsonReq('/api/meal-plan/generate', { days: 3 }));
+        expect(res.status).toBe(401);
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('answers 400 to a malformed body and makes no call', async () => {
+        const spy = stubLlm('{}');
+        const res = await mealPlan(new NextRequest('http://localhost/api/meal-plan/generate', { method: 'POST', body: '{nope' }));
+        expect(res.status).toBe(400);
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        [30, 14], [14, 14], [0, 1], [-5, 1], [3, 3], ['junk', 7], [undefined, 7],
+    ])('clamps days=%s to a %i-day plan', async (asked, used) => {
+        db.recipes = { data: [], error: null };
+        const spy = stubLlm('{"days":[]}');
+        await mealPlan(jsonReq('/api/meal-plan/generate', { days: asked }));
+        const prompt = sentBody(spy).messages[0].content as string;
+        expect(prompt).toContain(`create a ${used}-day meal plan`);
+        expect(prompt).toContain(`- Plan length: ${used} days`);
+    });
+
+    it('maps a Gemini 429 to a 503 "AI is busy"', async () => {
+        db.recipes = { data: [], error: null };
+        stubLlm('', 429);
+        const res = await mealPlan(jsonReq('/api/meal-plan/generate', { days: 3 }));
+        expect(res.status).toBe(503);
+        expect((await res.json()).error).toBe('AI is busy, try again in a minute.');
     });
 });
 
@@ -159,9 +197,9 @@ describe('POST /api/nutrition/[id]', () => {
 
 // ── receipts/scan ────────────────────────────────────────────────────────────
 describe('POST /api/receipts/scan', () => {
-    function receiptReq() {
+    function receiptReq(type = 'image/png', bytes: Uint8Array<ArrayBuffer> = new Uint8Array([1, 2, 3])) {
         const fd = new FormData();
-        fd.append('image', new File([new Uint8Array([1, 2, 3])], 'r.png', { type: 'image/png' }));
+        fd.append('image', new File([bytes], 'r.png', { type }));
         return new NextRequest('http://localhost/api/receipts/scan', { method: 'POST', body: fd });
     }
 
@@ -195,6 +233,41 @@ describe('POST /api/receipts/scan', () => {
         expect(res.status).toBe(503);
         expect(spy).not.toHaveBeenCalled();
     });
+
+    it('answers 401 to an anonymous caller and makes no call', async () => {
+        signedIn = false;
+        const spy = stubLlm('{}');
+        expect((await receipts(receiptReq())).status).toBe(401);
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it.each(['image/webp', 'image/jpeg', 'IMAGE/JPEG'])('accepts %s', async (type) => {
+        stubLlm('{"items":[]}');
+        expect((await receipts(receiptReq(type))).status).toBe(200);
+    });
+
+    it.each(['image/heic', 'application/pdf', ''])('answers 415 to type "%s" and makes no call', async (type) => {
+        const spy = stubLlm('{}');
+        const res = await receipts(receiptReq(type));
+        expect(res.status).toBe(415);
+        expect((await res.json()).error).toBe('Use a JPEG, PNG or WebP photo.');
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('answers a JSON 413 above 4 MB and makes no call', async () => {
+        const spy = stubLlm('{}');
+        const res = await receipts(receiptReq('image/jpeg', new Uint8Array(4 * 1024 * 1024 + 1)));
+        expect(res.status).toBe(413);
+        expect((await res.json()).error).toMatch(/too large/);
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('maps a Gemini 429 to a 503 "AI is busy"', async () => {
+        stubLlm('', 429);
+        const res = await receipts(receiptReq());
+        expect(res.status).toBe(503);
+        expect((await res.json()).error).toBe('AI is busy, try again in a minute.');
+    });
 });
 
 // ── substitutions ────────────────────────────────────────────────────────────
@@ -219,6 +292,35 @@ describe('POST /api/substitutions', () => {
         const res = await substitutions(jsonReq('/api/substitutions', { ingredient: 'lemon' }));
         expect(res.status).toBe(503);
         expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('answers 401 to an anonymous caller and makes no call', async () => {
+        signedIn = false;
+        const spy = stubLlm('{}');
+        expect((await substitutions(jsonReq('/api/substitutions', { ingredient: 'lemon' }))).status).toBe(401);
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('maps a Gemini 429 to a 503 "AI is busy"', async () => {
+        stubLlm('', 429);
+        const res = await substitutions(jsonReq('/api/substitutions', { ingredient: 'lemon' }));
+        expect(res.status).toBe(503);
+        expect((await res.json()).error).toBe('AI is busy, try again in a minute.');
+    });
+});
+
+// ── recipes/search ───────────────────────────────────────────────────────────
+describe('POST /api/recipes/search', () => {
+    it('answers 401 to an anonymous caller and makes no embedding call', async () => {
+        signedIn = false;
+        const spy = stubLlm('{}');
+        expect((await search(jsonReq('/api/recipes/search', { query: 'curry' }))).status).toBe(401);
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('answers 400 to a malformed body', async () => {
+        const res = await search(new NextRequest('http://localhost/api/recipes/search', { method: 'POST', body: '{nope' }));
+        expect(res.status).toBe(400);
     });
 });
 

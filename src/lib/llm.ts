@@ -35,12 +35,32 @@ export function llmConfigured(): boolean {
     return Boolean(process.env.GEMINI_API_KEY?.trim());
 }
 
-/** Thrown for a non-2xx response or a reply with no text; the message never echoes the body. */
+/** Abort a call that has not answered in this long; routes that wait on it set maxDuration = 60. */
+export const LLM_TIMEOUT_MS = 45_000;
+
+/**
+ * Thrown for a non-2xx response, a timeout, a network failure or a reply with no text; the message
+ * never echoes the body. `status` is the upstream HTTP status when there was one.
+ */
 export class LlmError extends Error {
-    constructor(message: string, readonly status?: number) {
+    constructor(message: string, readonly status?: number, readonly timedOut = false) {
         super(message);
         this.name = "LlmError";
     }
+}
+
+/**
+ * The JSON error and HTTP status a route returns when the LLM call failed. A Gemini 429 (free-tier
+ * quota) is a 503 "busy" rather than a scary failure; everything else is a 502 naming the feature.
+ */
+export function llmFailure(err: unknown, feature: string): { status: number; error: string } {
+    if (err instanceof LlmError && err.status === 429) {
+        return { status: 503, error: "AI is busy, try again in a minute." };
+    }
+    if (err instanceof LlmError && err.timedOut) {
+        return { status: 502, error: `The ${feature} took too long to answer. Try again.` };
+    }
+    return { status: 502, error: `Could not reach the ${feature}.` };
 }
 
 /** Strip ```json fences and parse. Returns undefined (not a throw) on anything that is not JSON. */
@@ -65,6 +85,8 @@ export interface LlmJsonResult {
     json: unknown;
     /** The model's text, for error reporting. */
     raw: string;
+    /** "stop", or "length" when max_tokens cut the reply off (the JSON will then not parse). */
+    finishReason?: string;
 }
 
 /**
@@ -79,23 +101,35 @@ export async function llmJson({ prompt, image, maxTokens = 1024 }: LlmJsonInput)
           ]
         : prompt;
 
-    const res = await fetch(CHAT_COMPLETIONS_URL, {
-        method: "POST",
-        headers: llmHeaders(),
-        body: JSON.stringify({
-            model: LLM_MODEL,
-            messages: [{ role: "user", content }],
-            max_tokens: maxTokens,
-            response_format: { type: "json_object" },
-        }),
-    });
+    let res: Response;
+    try {
+        res = await fetch(CHAT_COMPLETIONS_URL, {
+            method: "POST",
+            headers: llmHeaders(),
+            body: JSON.stringify({
+                model: LLM_MODEL,
+                messages: [{ role: "user", content }],
+                max_tokens: maxTokens,
+                response_format: { type: "json_object" },
+            }),
+            signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+        });
+    } catch (err) {
+        const name = err instanceof Error ? err.name : "";
+        if (name === "TimeoutError" || name === "AbortError") {
+            throw new LlmError(`LLM request timed out after ${LLM_TIMEOUT_MS} ms`, undefined, true);
+        }
+        throw new LlmError("LLM request failed: network error");
+    }
     if (!res.ok) {
         throw new LlmError(`LLM request failed: HTTP ${res.status}`, res.status);
     }
-    const data = (await res.json()) as { choices?: { message?: { content?: unknown } }[] };
+    const data = (await res.json()) as {
+        choices?: { message?: { content?: unknown }; finish_reason?: string }[];
+    };
     const raw = data.choices?.[0]?.message?.content;
     if (typeof raw !== "string" || !raw.trim()) {
         throw new LlmError("LLM returned no text");
     }
-    return { json: parseJsonLoose(raw), raw };
+    return { json: parseJsonLoose(raw), raw, finishReason: data.choices?.[0]?.finish_reason };
 }

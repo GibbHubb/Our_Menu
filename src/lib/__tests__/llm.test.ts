@@ -1,7 +1,7 @@
 // OM73 — the JSON-mode Gemini helper the four ex-Anthropic routes share. fetch is stubbed
 // per test; the suite's no-network stub stays in place for everything else.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CHAT_COMPLETIONS_URL, LLM_MODEL, LlmError, llmConfigured, llmJson, parseJsonLoose } from '@/lib/llm';
+import { CHAT_COMPLETIONS_URL, LLM_MODEL, LlmError, llmConfigured, llmFailure, llmJson, parseJsonLoose } from '@/lib/llm';
 import { rejectWrong } from './control';
 
 const realFetch = globalThis.fetch;
@@ -51,11 +51,12 @@ describe('llmJson', () => {
     it('posts a JSON-mode chat completion to Gemini with the bearer key and model', async () => {
         const spy = stubFetch(200, reply('{"ok":true}'));
         const out = await llmJson({ prompt: 'hi', maxTokens: 77 });
-        expect(out).toEqual({ json: { ok: true }, raw: '{"ok":true}' });
+        expect(out).toEqual({ json: { ok: true }, raw: '{"ok":true}', finishReason: undefined });
 
         const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
         expect(url).toBe(CHAT_COMPLETIONS_URL);
         expect((init.headers as Record<string, string>).Authorization).toBe('Bearer test-key');
+        expect(init.signal).toBeInstanceOf(AbortSignal);
         expect(JSON.parse(String(init.body))).toEqual({
             model: LLM_MODEL,
             messages: [{ role: 'user', content: 'hi' }],
@@ -82,9 +83,45 @@ describe('llmJson', () => {
         expect(err.message).not.toContain('secret');
     });
 
+    it('reports finish_reason so a truncated reply is visible', async () => {
+        stubFetch(200, { choices: [{ message: { content: '{"days":[' }, finish_reason: 'length' }] });
+        const out = await llmJson({ prompt: 'x' });
+        expect(out.finishReason).toBe('length');
+        expect(out.json).toBeUndefined();
+    });
+
+    it('turns a timeout into LlmError(timedOut) and a network failure into LlmError', async () => {
+        globalThis.fetch = (async () => {
+            throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+        }) as unknown as typeof fetch;
+        const timeout = await llmJson({ prompt: 'x' }).catch((e) => e);
+        expect(timeout).toBeInstanceOf(LlmError);
+        expect(timeout.timedOut).toBe(true);
+
+        globalThis.fetch = (async () => {
+            throw new TypeError('fetch failed');
+        }) as unknown as typeof fetch;
+        const net = await llmJson({ prompt: 'x' }).catch((e) => e);
+        expect(net).toBeInstanceOf(LlmError);
+        expect(net.timedOut).toBe(false);
+    });
+
     it('throws LlmError when the reply has no text', async () => {
         stubFetch(200, { choices: [] });
         await expect(llmJson({ prompt: 'x' })).rejects.toBeInstanceOf(LlmError);
+    });
+
+    it('llmFailure maps 429 to a 503 "busy", a timeout and anything else to a 502', () => {
+        expect(llmFailure(new LlmError('x', 429), 'meal planner')).toEqual({
+            status: 503, error: 'AI is busy, try again in a minute.',
+        });
+        expect(llmFailure(new LlmError('x', undefined, true), 'meal planner')).toEqual({
+            status: 502, error: 'The meal planner took too long to answer. Try again.',
+        });
+        expect(llmFailure(new LlmError('x', 500), 'meal planner')).toEqual({
+            status: 502, error: 'Could not reach the meal planner.',
+        });
+        expect(llmFailure(new Error('boom'), 'receipt scanner').status).toBe(502);
     });
 
     it('CONTROL: fenced JSON is parsed, not handed back as undefined', () => {

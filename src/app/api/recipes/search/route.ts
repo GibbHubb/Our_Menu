@@ -2,11 +2,20 @@
 // GEMINI_API_KEY), then ranks with the match_recipes RPC from migration 001.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createRequestClient } from '@/lib/supabaseServer';
+import { createRequestClient, getRequestUser } from '@/lib/supabaseServer';
 import { embedText, embeddingsConfigured } from '@/lib/embeddings';
 
 export async function POST(req: NextRequest) {
-    const { query } = await req.json();
+    // OM73 — signed-in callers only: each search spends a Gemini embedding call.
+    if (!(await getRequestUser(req))) {
+        return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 });
+    }
+    let query: unknown;
+    try {
+        ({ query } = await req.json());
+    } catch {
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
     if (!query) return NextResponse.json({ error: 'query required' }, { status: 400 });
 
     // OM14c — search the caller's own recipes, not the anonymous view.

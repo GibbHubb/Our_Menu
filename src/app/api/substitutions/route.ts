@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestUser } from '@/lib/supabaseServer';
-import { llmConfigured, llmJson } from '@/lib/llm';
+import { LlmError, llmConfigured, llmFailure, llmJson } from '@/lib/llm';
 
 interface Substitution {
     name: string;
@@ -52,6 +52,10 @@ Return ONLY valid JSON matching this schema — no markdown, no prose:
         return NextResponse.json({ substitutions: parsed.substitutions });
     } catch (err) {
         console.error('Substitution error:', err);
+        if (err instanceof LlmError) {
+            const { status, error } = llmFailure(err, 'substitution helper');
+            return NextResponse.json({ error }, { status });
+        }
         return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to get substitutions' }, { status: 500 });
     }
 }
