@@ -20,15 +20,19 @@ let inflight: Promise<StatusBody> | null = null;
 async function fetchStatus(): Promise<StatusBody> {
     if (cached !== null) return cached;
     if (!inflight) {
+        // OM72 review — only a good answer is cached. A failed fetch (offline, a blip) reads as "off"
+        // for this mount only, and the next mount asks again instead of hiding AI for the session.
         inflight = fetch("/api/ai-status")
-            .then((r) => (r.ok ? r.json() : { enabled: false }))
-            .then((j: unknown) => {
-                cached = j && typeof j === "object" ? (j as StatusBody) : { enabled: false };
+            .then(async (r) => {
+                if (!r.ok) throw new Error(`ai-status HTTP ${r.status}`);
+                const j: unknown = await r.json();
+                if (!j || typeof j !== "object") throw new Error("ai-status: not an object");
+                cached = j as StatusBody;
                 return cached;
             })
-            .catch(() => {
-                cached = { enabled: false };
-                return cached;
+            .catch((): StatusBody => {
+                inflight = null;
+                return { enabled: false };
             });
     }
     return inflight;

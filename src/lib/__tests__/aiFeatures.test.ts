@@ -8,6 +8,7 @@ import {
     aiFeatureOffError,
     aiStatusBody,
     disabledAiFeatures,
+    isAiAdmin,
     resolveAiFeature,
 } from '@/lib/aiFeatures';
 import { embedSyncSummary } from '@/lib/embedSync';
@@ -66,6 +67,17 @@ describe('aiFeatureOffError', () => {
         expect(aiFeatureOffError('chat', 'Chat is', KEY)).toBeNull();
         expect(aiFeatureOffError('chat', 'Chat is', {})).toBe('Chat is not configured (GEMINI_API_KEY missing)');
         expect(aiFeatureOffError('chat', 'Chat is', { ...KEY, AI_DISABLE: 'chat' })).toBe('Chat is switched off on this deployment.');
+    });
+});
+
+describe('isAiAdmin', () => {
+    it('matches an id in AI_ADMIN_USER_IDS, spaces ignored; unset or empty means nobody', () => {
+        expect(isAiAdmin('u1', { AI_ADMIN_USER_IDS: ' u0 , u1 ' })).toBe(true);
+        expect(isAiAdmin('u2', { AI_ADMIN_USER_IDS: 'u0,u1' })).toBe(false);
+        expect(isAiAdmin('u1', {})).toBe(false);
+        expect(isAiAdmin('u1', { AI_ADMIN_USER_IDS: '' })).toBe(false);
+        expect(isAiAdmin(null, { AI_ADMIN_USER_IDS: 'u1' })).toBe(false);
+        expect(isAiAdmin('', { AI_ADMIN_USER_IDS: ',' })).toBe(false);
     });
 });
 

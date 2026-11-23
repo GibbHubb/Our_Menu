@@ -12,11 +12,25 @@ const updates: { table: string; values: unknown }[] = [];
 const upserts: { table: string; values: unknown }[] = [];
 let upsertError: unknown = null;
 
+const ranges: { table: string; from: number; to: number }[] = [];
+
 function chain(table: string) {
-    const result = () => db[table] ?? { data: null, error: null };
+    let slice: [number, number] | null = null;
+    const result = () => {
+        const r = db[table] ?? { data: null, error: null };
+        // `.range(from, to)` pages like PostgREST: inclusive bounds over the table's rows.
+        if (slice && Array.isArray(r.data)) return { ...r, data: r.data.slice(slice[0], slice[1] + 1) };
+        return r;
+    };
     const c: Record<string, unknown> = {
         select: () => c,
         eq: () => c,
+        order: () => c,
+        range: (from: number, to: number) => {
+            ranges.push({ table, from, to });
+            slice = [from, to];
+            return c;
+        },
         gte: () => c,
         single: () => Promise.resolve(result()),
         update: (values: unknown) => {
@@ -45,13 +59,14 @@ import { POST as receipts } from '@/app/api/receipts/scan/route';
 import { POST as substitutions } from '@/app/api/substitutions/route';
 import { GET as aiStatus } from '@/app/api/ai-status/route';
 import { POST as search } from '@/app/api/recipes/search/route';
-import { POST as embed } from '@/app/api/recipes/embed/route';
+import { GET as embedAdmin, POST as embed } from '@/app/api/recipes/embed/route';
 import { POST as chat } from '@/app/api/chat/route';
 
 // ── fetch stub ───────────────────────────────────────────────────────────────
 const realFetch = globalThis.fetch;
 const realKey = process.env.GEMINI_API_KEY;
 const realDisable = process.env.AI_DISABLE;
+const realAdmins = process.env.AI_ADMIN_USER_IDS;
 
 function stubLlm(content: string, status = 200) {
     const body = status === 200 ? { choices: [{ message: { content } }] } : { error: 'x' };
@@ -71,6 +86,8 @@ beforeEach(() => {
     process.env.GEMINI_API_KEY = 'test-key';
     signedIn = true;
     delete process.env.AI_DISABLE;
+    process.env.AI_ADMIN_USER_IDS = 'user-1';  // the mocked signed-in user is an admin unless a test says not
+    ranges.length = 0;
     for (const k of Object.keys(db)) delete db[k];
     updates.length = 0;
     upserts.length = 0;
@@ -83,6 +100,8 @@ afterEach(() => {
     else process.env.GEMINI_API_KEY = realKey;
     if (realDisable === undefined) delete process.env.AI_DISABLE;
     else process.env.AI_DISABLE = realDisable;
+    if (realAdmins === undefined) delete process.env.AI_ADMIN_USER_IDS;
+    else process.env.AI_ADMIN_USER_IDS = realAdmins;
 });
 
 // ── meal-plan/generate ───────────────────────────────────────────────────────
@@ -432,8 +451,8 @@ describe('per-feature switch (AI_DISABLE)', () => {
 
 // ── OM72: recipes/embed ──────────────────────────────────────────────────────
 describe('POST /api/recipes/embed', () => {
-    const recipes = (n: number) =>
-        Array.from({ length: n }, (_, i) => ({ id: `r${i}`, title: `Recipe ${i}`, ingredients: 'x', instructions: 'y' }));
+    const recipes = (n: number, household_id: string | null = null) =>
+        Array.from({ length: n }, (_, i) => ({ id: `r${i}`, title: `Recipe ${i}`, ingredients: 'x', instructions: 'y', household_id }));
 
     /** Gemini embedContent stub; `statusFor(callIndex)` picks the HTTP status per call. */
     function stubEmbed(statusFor: (i: number) => number = () => 200) {
@@ -489,23 +508,90 @@ describe('POST /api/recipes/embed', () => {
         expect(out).toEqual({ embedded: 3, skipped: 0, failed: 1, remaining: 9, busy: true });
     });
 
-    it('?force=1 re-embeds existing vectors and returns `since` to resume with', async () => {
+    it('?force=1 without since is refused (400), so presses cannot redo the first batch forever', async () => {
         db.recipes = { data: recipes(2), error: null };
-        db.recipe_embeddings = { data: [{ recipe_id: 'r0', embedded_at: old }], error: null };
-        stubEmbed();
-        const out = await (await post('?force=1')).json();
-        expect(out).toMatchObject({ embedded: 2, skipped: 0, failed: 0, remaining: 0 });
-        expect(Date.parse(out.since)).not.toBeNaN();
+        db.recipe_embeddings = { data: [], error: null };
+        const spy = stubEmbed();
+        expect((await post('?force=1')).status).toBe(400);
+        expect((await post('?force=1&since=junk')).status).toBe(400);
+        expect((await post('?force=1&since=2999-01-01T00:00:00Z')).status).toBe(400);
+        expect(spy).not.toHaveBeenCalled();
+    });
 
-        // Resuming with since: a vector written after it counts as done.
+    it('?force=1&since= re-embeds vectors older than since; the same since on the next press makes progress', async () => {
+        const since = new Date(Date.now() - 60_000).toISOString();  // the run started a minute ago
+        db.recipes = { data: recipes(25), error: null };
+        db.recipe_embeddings = { data: recipes(25).map((r) => ({ recipe_id: r.id, embedded_at: old })), error: null };
+        stubEmbed();
+        expect(await (await post(`?force=1&since=${since}`)).json())
+            .toEqual({ embedded: 20, skipped: 0, failed: 0, remaining: 5 });
+
+        // Press 2: the 20 just written are newer than since, so only the last 5 are worked.
+        const fresh = new Date().toISOString();
         db.recipe_embeddings = {
-            data: [{ recipe_id: 'r0', embedded_at: '2026-11-23T10:00:00Z' }, { recipe_id: 'r1', embedded_at: old }],
+            data: recipes(25).map((r, i) => ({ recipe_id: r.id, embedded_at: i < 20 ? fresh : old })),
             error: null,
         };
         const spy = stubEmbed();
-        expect(await (await post('?force=1&since=2026-11-23T09:00:00Z')).json())
-            .toEqual({ embedded: 1, skipped: 1, failed: 0, remaining: 0, since: '2026-11-23T09:00:00.000Z' });
-        expect(spy).toHaveBeenCalledTimes(1);
+        expect(await (await post(`?force=1&since=${since}`)).json())
+            .toEqual({ embedded: 5, skipped: 20, failed: 0, remaining: 0 });
+        expect(spy).toHaveBeenCalledTimes(5);
+    });
+
+    it('skips recipes it can read but not write (another household\'s public recipe): no call, not remaining', async () => {
+        db.household_members = { data: [{ household_id: 'h-mine' }], error: null };
+        db.recipes = {
+            data: [
+                ...recipes(2, 'h-mine'),
+                { id: 'pub', title: 'Public', ingredients: 'x', instructions: 'y', household_id: 'h-other' },
+                { id: 'legacy', title: 'Legacy', ingredients: 'x', instructions: 'y', household_id: null },
+            ],
+            error: null,
+        };
+        db.recipe_embeddings = { data: [], error: null };
+        const spy = stubEmbed();
+        expect(await (await post()).json()).toEqual({ embedded: 3, skipped: 1, failed: 0, remaining: 0 });
+        expect(spy).toHaveBeenCalledTimes(3);
+        expect(upserts.map((u) => (u.values as { recipe_id: string }).recipe_id)).not.toContain('pub');
+    });
+
+    it('pages both selects past the 1000-row default so the counts are right', async () => {
+        db.recipes = { data: recipes(1500), error: null };
+        db.recipe_embeddings = { data: recipes(1490).map((r) => ({ recipe_id: r.id, embedded_at: old })), error: null };
+        stubEmbed();
+        expect(await (await post()).json()).toEqual({ embedded: 10, skipped: 1490, failed: 0, remaining: 0 });
+        expect(ranges.filter((r) => r.table === 'recipes').map((r) => r.from)).toEqual([0, 1000]);
+        expect(ranges.filter((r) => r.table === 'recipe_embeddings').map((r) => r.from)).toEqual([0, 1000]);
+    });
+
+    it('answers 403 to a signed-in non-admin (and to everyone when AI_ADMIN_USER_IDS is unset), before any work', async () => {
+        db.recipes = { data: recipes(3), error: null };
+        const spy = stubEmbed();
+        process.env.AI_ADMIN_USER_IDS = 'someone-else, another';
+        expect((await post()).status).toBe(403);
+        delete process.env.AI_ADMIN_USER_IDS;
+        expect((await post()).status).toBe(403);
+        expect(spy).not.toHaveBeenCalled();
+        expect(ranges).toHaveLength(0);
+    });
+
+    it('GET says whether the caller is an admin (drives the Sync button)', async () => {
+        const get = () => embedAdmin(new NextRequest('http://localhost/api/recipes/embed'));
+        expect(await (await get()).json()).toEqual({ admin: true });
+        process.env.AI_ADMIN_USER_IDS = 'someone-else';
+        expect(await (await get()).json()).toEqual({ admin: false });
+        process.env.AI_ADMIN_USER_IDS = 'user-1';
+        signedIn = false;
+        expect(await (await get()).json()).toEqual({ admin: false });
+    });
+
+    it('CONTROL: a non-admin cannot run the sync', async () => {
+        // Goes red under OM54_INVERT_CONTROLS=1. The known-wrong answer is the 7f09e18 review finding:
+        // any signed-in user of the shared Supabase project could run the sync (200).
+        process.env.AI_ADMIN_USER_IDS = 'someone-else';
+        db.recipes = { data: [], error: null };
+        db.recipe_embeddings = { data: [], error: null };
+        rejectWrong((await post()).status, 200);
     });
 
     it('answers 401 to an anonymous caller and makes no call', async () => {

@@ -157,6 +157,18 @@ function MenuContent() {
     // OM72 — read once: the URL sync below rewrote the query string on mount and dropped
     // `?admin=1`, so the admin Sync button vanished before it could be pressed.
     const [adminMode] = useState(() => searchParams.get("admin") === "1");
+    // OM72 review — the Sync button shows only when the server says this user is an admin
+    // (AI_ADMIN_USER_IDS); `?admin=1` just asks the question.
+    const [isEmbedAdmin, setIsEmbedAdmin] = useState(false);
+    useEffect(() => {
+        if (!adminMode || !user) return;
+        let alive = true;
+        apiFetch('/api/recipes/embed')
+            .then((r) => readJsonSafe(r))
+            .then((j) => { if (alive) setIsEmbedAdmin(j.admin === true); })
+            .catch(() => { /* not an admin as far as this page knows */ });
+        return () => { alive = false; };
+    }, [adminMode, user]);
 
     // Sync state to URL
     useEffect(() => {
@@ -501,7 +513,7 @@ function MenuContent() {
                 {/* Admin-only: sync embeddings — visible at ?admin=1 */}
                 {/* OM72 — each press embeds a capped batch of recipes with no vector yet and says how
                     many remain; press again until 0. Was a blind 'Embeddings synced!' toast. */}
-                {adminMode && (
+                {adminMode && isEmbedAdmin && (
                     <div className="mt-2 flex items-center gap-2 flex-wrap">
                         <button
                             onClick={handleSyncEmbeddings}

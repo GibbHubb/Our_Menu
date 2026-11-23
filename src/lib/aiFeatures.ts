@@ -86,3 +86,14 @@ export function aiFeatureOffError(feature: AiFeature, subject: string, env: Env 
     if (disabledAiFeatures(env.AI_DISABLE).has(feature)) return `${subject} switched off on this deployment.`;
     return null;
 }
+
+/**
+ * OM72 review — who may run the embed sync (`/api/recipes/embed`). The Supabase project is shared with
+ * other apps' users, and `?admin=1` is only a UI switch, so the route checks this server-side.
+ * `AI_ADMIN_USER_IDS` is a comma-separated list of Supabase auth user ids; empty or unset = nobody.
+ */
+export function isAiAdmin(userId: string | null | undefined, env: Env = process.env): boolean {
+    if (!userId) return false;
+    const ids = (env.AI_ADMIN_USER_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    return ids.includes(userId);
+}
