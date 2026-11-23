@@ -1,14 +1,15 @@
-// Requires: ANTHROPIC_API_KEY in .env.local
+// Requires: GEMINI_API_KEY (OM73: moved off the paid SDK; personal work is Gemini free tier only)
 // Requires: 002_meal_plans.sql applied in Supabase
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createRequestClient } from '@/lib/supabaseServer';
-import Anthropic from '@anthropic-ai/sdk';
 import { currentSeason } from '@/lib/seasons';
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { llmConfigured, llmJson } from '@/lib/llm';
 
 export async function POST(req: NextRequest) {
+    if (!llmConfigured()) {
+        return NextResponse.json({ error: 'Meal plans are not configured (GEMINI_API_KEY missing)' }, { status: 503 });
+    }
     const { pantry, dietary, days } = await req.json();
 
     // OM14c — read as the caller so recipes and cook_log are their own rows
@@ -71,29 +72,25 @@ Return ONLY valid JSON matching this schema exactly:
 
 Prefer recipes from the library. For days where no library recipe fits, suggest a new simple meal.`;
 
-    const message = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2048,
-        messages: [{ role: 'user', content: prompt }],
-    });
-
-    const raw = (message.content[0] as { text: string }).text
-        .replace(/```json\n?/g, '')
-        .replace(/```/g, '')
-        .trim();
-
-    let plan;
+    let json: unknown;
+    let raw: string;
     try {
-        plan = JSON.parse(raw);
-    } catch {
+        ({ json, raw } = await llmJson({ prompt, maxTokens: 4096 }));
+    } catch (err) {
+        console.error('[OM73] meal plan LLM call failed:', err);
+        return NextResponse.json({ error: 'Could not reach the meal planner.' }, { status: 502 });
+    }
+
+    const plan = json as { days?: unknown } | undefined;
+    if (!plan || typeof plan !== 'object' || !Array.isArray(plan.days)) {
         return NextResponse.json({ error: 'Failed to parse meal plan', raw }, { status: 500 });
     }
 
     // Match recipe IDs by title
     const recipeMap = new Map((recipes ?? []).map(r => [r.title.toLowerCase(), r.id]));
-    plan.days = plan.days.map((d: { recipe_title?: string; [key: string]: unknown }) => ({
+    plan.days = (plan.days as { recipe_title?: unknown; [key: string]: unknown }[]).map((d) => ({
         ...d,
-        recipe_id: d.recipe_title
+        recipe_id: typeof d.recipe_title === 'string' && d.recipe_title
             ? (recipeMap.get(d.recipe_title.toLowerCase()) ?? null)
             : null,
     }));

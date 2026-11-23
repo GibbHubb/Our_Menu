@@ -1,8 +1,8 @@
-// Requires: ANTHROPIC_API_KEY in .env.local
+// Requires: GEMINI_API_KEY (OM73: moved off the paid SDK; personal work is Gemini free tier only)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestUser } from '@/lib/supabaseServer';
-import Anthropic from '@anthropic-ai/sdk';
+import { llmConfigured, llmJson } from '@/lib/llm';
 
 interface Substitution {
     name: string;
@@ -21,11 +21,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'ingredient is required' }, { status: 400 });
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-        return NextResponse.json({ error: 'Substitutions are not configured (ANTHROPIC_API_KEY missing)' }, { status: 503 });
+    if (!llmConfigured()) {
+        return NextResponse.json({ error: 'Substitutions are not configured (GEMINI_API_KEY missing)' }, { status: 503 });
     }
-
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const prompt = `You are a chef's assistant helping someone cook without a key ingredient.
 
@@ -44,19 +42,10 @@ Return ONLY valid JSON matching this schema — no markdown, no prose:
 }`;
 
     try {
-        const message = await anthropic.messages.create({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 512,
-            messages: [{ role: 'user', content: prompt }],
-        });
+        const { json, raw } = await llmJson({ prompt, maxTokens: 1024 });
 
-        const raw = (message.content[0] as { text: string }).text
-            .replace(/```json\n?/g, '')
-            .replace(/```/g, '')
-            .trim();
-
-        const parsed = JSON.parse(raw) as { substitutions: Substitution[] };
-        if (!Array.isArray(parsed.substitutions)) {
+        const parsed = json as { substitutions?: Substitution[] } | undefined;
+        if (!parsed || !Array.isArray(parsed.substitutions)) {
             return NextResponse.json({ error: 'Unexpected response format', raw }, { status: 500 });
         }
 

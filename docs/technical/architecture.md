@@ -48,7 +48,7 @@ schema of a Supabase project shared with other apps (see `data-model.md`).
 
 `recipes/embed` and `recipes/search` use Gemini embeddings (`src/lib/embeddings.ts`: `gemini-embedding-001` at 1536
 dimensions to fit `recipe_embeddings.embedding vector(1536)`, `GEMINI_API_KEY`). OM68 removed the OpenAI SDK and key.
-The semantic search bar is still hidden by the `ai-status` flag, which only checks `ANTHROPIC_API_KEY`.
+The semantic search bar is still hidden by the `ai-status` flag, which checks `GEMINI_API_KEY` (OM73; OM72 makes it per-feature).
 
 ## Key flows
 

@@ -1,4 +1,4 @@
-// OM11 — pure helpers for the nutrition feature. Claude call lives in
+// OM11 — pure helpers for the nutrition feature. The LLM call (Gemini, OM73) lives in
 // /api/nutrition/[id] (server-only because of the API key).
 
 import { createHash } from "node:crypto";
@@ -10,7 +10,7 @@ export interface NutritionEstimate {
     fat_g: number;
 }
 
-/** Sha256 of normalised ingredients — lets the API skip Claude when the
+/** Sha256 of normalised ingredients — lets the API skip the LLM when the
  *  ingredient list hasn't changed since the last estimate. */
 export function hashIngredients(raw: string | null | undefined): string {
     const normalised = (raw || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -32,7 +32,7 @@ Estimate the **per-serving** nutrition for this recipe. Use realistic supermarke
   "fat_g":            <integer 0-120>
 }`;
 
-/** Validate + clamp Claude's JSON output. Returns null when the shape is wrong
+/** Validate + clamp the LLM's JSON output. Returns null when the shape is wrong
  *  so callers can short-circuit to an error path without a try/catch. */
 export function parseNutritionResponse(raw: string): NutritionEstimate | null {
     const cleaned = raw.replace(/```json\n?/g, "").replace(/```/g, "").trim();

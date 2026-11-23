@@ -2,12 +2,12 @@
 // POST /api/nutrition/{recipeId}            ← cache-aware (skips if hash matches)
 // POST /api/nutrition/{recipeId}?force=1    ← bypasses the hash dedupe
 //
-// Rate-limit: refuses to call Claude more than once per 60 s for the same recipe.
+// Rate-limit: refuses to call the LLM (Gemini, OM73) more than once per 60 s for the same recipe.
 
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import { createRequestClient } from "@/lib/supabaseServer";
 import { NUTRITION_PROMPT, hashIngredients, parseNutritionResponse } from "@/lib/nutrition";
+import { llmConfigured, llmJson } from "@/lib/llm";
 
 const RATE_LIMIT_SECONDS = 60;
 
@@ -17,9 +17,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     const force = req.nextUrl.searchParams.get("force") === "1";
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!llmConfigured()) {
         return NextResponse.json(
-            { error: "Nutrition estimates aren't configured (ANTHROPIC_API_KEY missing)" },
+            { error: "Nutrition estimates aren't configured (GEMINI_API_KEY missing)" },
             { status: 503 },
         );
     }
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     const newHash = hashIngredients(recipe.ingredients);
     if (!force && recipe.ingredients_hash === newHash && recipe.kcal_per_serving != null) {
-        // Cache hit — skip Claude, return cached values from the row.
+        // Cache hit — skip the LLM, return cached values from the row.
         return NextResponse.json({
             cached: true,
             kcal_per_serving: recipe.kcal_per_serving,
@@ -61,20 +61,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         });
     }
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     let raw: string;
     try {
-        const message = await anthropic.messages.create({
-            model: "claude-haiku-4-5-20251001",
-            max_tokens: 256,
-            messages: [{
-                role: "user",
-                content: NUTRITION_PROMPT(recipe.title || "Untitled", recipe.ingredients, 4),
-            }],
-        });
-        raw = (message.content[0] as { text: string }).text;
+        ({ raw } = await llmJson({
+            prompt: NUTRITION_PROMPT(recipe.title || "Untitled", recipe.ingredients, 4),
+            maxTokens: 1024,
+        }));
     } catch (err) {
-        console.error("[OM11] Claude nutrition call failed:", err);
+        console.error("[OM11] nutrition LLM call failed:", err);
         return NextResponse.json({ error: "Could not reach the nutrition estimator." }, { status: 502 });
     }
 

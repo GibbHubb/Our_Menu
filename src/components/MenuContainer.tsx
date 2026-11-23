@@ -248,7 +248,7 @@ function MenuContent() {
 
     // OM11 — fire-and-forget nutrition refresh after a recipe save. Runs only
     // when ingredients are present, never blocks the UX, and patches the local
-    // row when Claude returns so the pill appears within a few seconds.
+    // row when the estimator returns so the pill appears within a few seconds.
     const refreshNutrition = (recipe: Recipe) => {
         if (!recipe.ingredients || !recipe.ingredients.trim()) return;
         // OM35(b): this route writes to `recipes`, so it must arrive as the

@@ -13,7 +13,7 @@ export interface Recipe {
     shopping_list?: string;
     rating?: number;                                // OM5: 1-5 star rating
     shopping_list_checked?: Record<string, boolean>; // OM6: per-item checked state
-    // OM11 — per-serving nutrition (Claude estimate, cached on row)
+    // OM11 — per-serving nutrition (Gemini estimate, cached on row)
     kcal_per_serving?: number;
     protein_g?: number;
     carbs_g?: number;
