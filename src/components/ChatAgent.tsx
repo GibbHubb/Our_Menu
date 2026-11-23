@@ -4,6 +4,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { MessageSquare, X, Send, Loader2, Bot } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
+import { useAiFeature } from "@/lib/useAiFeature";  // OM72, OM74
+import { readJsonSafe, errorText } from "@/lib/readJsonSafe";  // OM74
 
 interface Message {
     role: "system" | "user" | "assistant";
@@ -11,6 +13,8 @@ interface Message {
 }
 
 export default function ChatAgent() {
+    // OM72 — follows the `chat` flag (it never checked any flag); OM74 — hidden signed out.
+    const chatOn = useAiFeature("chat");
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
         { role: "assistant", content: "Hi! I'm your kitchen AI. How can I help you today?" }
@@ -51,22 +55,26 @@ export default function ChatAgent() {
                 })
             });
 
-            if (!res.ok) throw new Error("Failed to fetch");
-            const data = await res.json();
+            const data = await readJsonSafe(res);  // OM74: a non-JSON error no longer throws
+            if (!res.ok) throw new Error(errorText(res, data));
 
             // Assume OpenAI-compatible format
-            const aiContent = data.choices?.[0]?.message?.content ||
-                data.message?.content ||
+            const choices = data.choices as { message?: { content?: string } }[] | undefined;
+            const aiContent = choices?.[0]?.message?.content ||
+                (data.message as { content?: string } | undefined)?.content ||
                 "I couldn't process that.";
 
             setMessages(prev => [...prev, { role: "assistant", content: aiContent }]);
         } catch (error) {
             console.error(error);
-            setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I ran into an error connecting to my brain." }]);
+            const detail = error instanceof Error && error.message ? ` (${error.message})` : "";
+            setMessages(prev => [...prev, { role: "assistant", content: `Sorry, I ran into an error connecting to my brain${detail}.` }]);
         } finally {
             setIsLoading(false);
         }
     };
+
+    if (chatOn !== true) return null;
 
     return (
         <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start gap-4 pointer-events-none">

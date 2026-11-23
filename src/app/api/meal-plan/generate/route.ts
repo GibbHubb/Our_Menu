@@ -4,7 +4,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRequestClient, getRequestUser } from '@/lib/supabaseServer';
 import { currentSeason } from '@/lib/seasons';
-import { llmConfigured, llmFailure, llmJson } from '@/lib/llm';
+import { llmFailure, llmJson } from '@/lib/llm';
+import { aiFeatureOffError } from '@/lib/aiFeatures';
+import { fixMealNames } from '@/lib/mealPlan';
 
 // A 14-day plan can take Gemini a while; the LLM call itself aborts at 45 s (src/lib/llm.ts).
 export const maxDuration = 60;
@@ -23,9 +25,8 @@ export async function POST(req: NextRequest) {
     if (!(await getRequestUser(req))) {
         return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 });
     }
-    if (!llmConfigured()) {
-        return NextResponse.json({ error: 'Meal plans are not configured (GEMINI_API_KEY missing)' }, { status: 503 });
-    }
+    const off = aiFeatureOffError('mealPlan', 'Meal plans are');  // OM72
+    if (off) return NextResponse.json({ error: off }, { status: 503 });
     let body: { pantry?: unknown; dietary?: unknown; days?: unknown };
     try {
         body = await req.json();
@@ -85,13 +86,15 @@ Return ONLY valid JSON matching this schema exactly:
   "days": [
     {
       "day": 1,
-      "meal": "Meal name",
+      "meal": "Dish name, e.g. Lamb Curry",
       "recipe_title": "exact title from library or null if new",
       "recipe_id": null,
       "reason": "brief reason"
     }
   ]
 }
+
+Rules for "meal": it is the name of the DISH being cooked (for example "Lamb Curry" or "Chicken Stir-fry"), never the meal type. Do not write "Breakfast", "Lunch", "Dinner", "Snack" or any other meal-time word as the "meal" value. When you pick a library recipe, "meal" is that recipe's title.
 
 Prefer recipes from the library. For days where no library recipe fits, suggest a new simple meal.`;
 
@@ -112,7 +115,8 @@ Prefer recipes from the library. For days where no library recipe fits, suggest 
 
     // Match recipe IDs by title
     const recipeMap = new Map((recipes ?? []).map(r => [r.title.toLowerCase(), r.id]));
-    plan.days = (plan.days as { recipe_title?: unknown; [key: string]: unknown }[]).map((d) => ({
+    // OM74 — a `meal` that is only a meal type ("Lunch") becomes the dish name.
+    plan.days = fixMealNames(plan.days as { meal?: unknown; recipe_title?: unknown; [key: string]: unknown }[]).map((d) => ({
         ...d,
         recipe_id: typeof d.recipe_title === 'string' && d.recipe_title
             ? (recipeMap.get(d.recipe_title.toLowerCase()) ?? null)

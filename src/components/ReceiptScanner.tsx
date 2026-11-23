@@ -1,6 +1,9 @@
 'use client';
 import { useState, useRef } from 'react';
 import { apiFetch } from '@/lib/apiFetch';  // OM35(b)
+import { useAiFeature } from '@/lib/useAiFeature';  // OM72, OM74
+import { readJsonSafe, errorText } from '@/lib/readJsonSafe';  // OM74
+import { downscaleImage } from '@/lib/imageDownscale';  // OM74
 
 interface Item {
     name: string;
@@ -12,6 +15,8 @@ interface Props {
 }
 
 export function ReceiptScanner({ onAddItems }: Props) {
+    // OM72/OM74 — hidden while receipts are switched off or nobody is signed in (the route needs a session).
+    const receiptsOn = useAiFeature('receipts');
     const [items, setItems] = useState<Item[]>([]);
     const [checked, setChecked] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(false);
@@ -24,19 +29,24 @@ export function ReceiptScanner({ onAddItems }: Props) {
         setLoading(true);
         setError('');
         setItems([]);
-        const fd = new FormData();
-        fd.append('image', file);
         try {
+            // OM74 — shrink (and re-encode to JPEG) before upload: a full-size phone photo is over
+            // Vercel's 4.5 MB body limit and never reached the route. Throws a readable message
+            // when the browser cannot decode the file (HEIC outside Safari).
+            const photo = await downscaleImage(file);
+            const fd = new FormData();
+            fd.append('image', photo);
             // FormData: apiFetch only adds Authorization, so the browser still
             // sets the multipart content-type + boundary itself.
             const res = await apiFetch('/api/receipts/scan', { method: 'POST', body: fd });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Scan failed');
-            if (!data.items?.length) {
+            const data = await readJsonSafe(res, 'Upload');
+            if (!res.ok) throw new Error(errorText(res, data, 'Upload'));
+            const found = Array.isArray(data.items) ? (data.items as Item[]) : [];
+            if (!found.length) {
                 setError('No items found — try a clearer photo.');
             } else {
-                setItems(data.items);
-                setChecked(new Set(data.items.map((_: Item, i: number) => i)));
+                setItems(found);
+                setChecked(new Set(found.map((_, i) => i)));
             }
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : String(e));
@@ -62,6 +72,8 @@ export function ReceiptScanner({ onAddItems }: Props) {
         setItems([]);
         setChecked(new Set());
     }
+
+    if (receiptsOn !== true) return null;
 
     return (
         <div style={{ marginTop: '12px' }}>

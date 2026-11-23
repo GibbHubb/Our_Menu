@@ -1,5 +1,5 @@
 /**
- * GET /api/ai-status  →  { enabled: boolean }
+ * GET /api/ai-status  →  { enabled: boolean, features: { chat, search, mealPlan, nutrition, receipts, substitutions } }
  *
  * OM35(c). Nutrition, Ask Chef, semantic search and AI meal plans have
  * returned 503 since the day they were written, because no key for the paid
@@ -13,7 +13,11 @@
  *
  * OM73: the last four routes on the old paid SDK (meal plan, nutrition,
  * receipts, substitutions) moved to Gemini, so the flag now keys on
- * GEMINI_API_KEY, the one key every AI feature uses. OM72 splits it per feature.
+ * GEMINI_API_KEY, the one key every AI feature uses.
+ *
+ * OM72: one flag per feature (src/lib/aiFeatures.ts). Each follows GEMINI_API_KEY and can be
+ * switched off on its own with AI_DISABLE=search,nutrition (then Redeploy in Vercel). `enabled`
+ * stays for pre-OM72 clients: true while any feature is on.
  *
  * The check is at runtime rather than build time on purpose — adding the key
  * in Vercel and redeploying turns every one of them back on with no code
@@ -21,15 +25,14 @@
  */
 
 import { NextResponse } from "next/server";
-import { llmConfigured } from "@/lib/llm";
+import { aiStatusBody } from "@/lib/aiFeatures";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-    const enabled = llmConfigured();
     return NextResponse.json(
-        { enabled },
+        aiStatusBody(),
         { headers: { "Cache-Control": "public, max-age=300" } },
     );
 }

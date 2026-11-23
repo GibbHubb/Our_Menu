@@ -27,6 +27,14 @@ export class EmbeddingsNotConfiguredError extends Error {
     }
 }
 
+/** OM72 — a non-2xx from Gemini, with its status so the embed route can stop on a 429. */
+export class EmbeddingsHttpError extends Error {
+    constructor(readonly status: number) {
+        super(`Gemini embeddings failed: HTTP ${status}`);
+        this.name = "EmbeddingsHttpError";
+    }
+}
+
 export function embeddingsConfigured(): boolean {
     return Boolean(process.env.GEMINI_API_KEY?.trim());
 }
@@ -63,7 +71,7 @@ export async function embedText(text: string, task: EmbeddingTask): Promise<numb
         }),
     });
     if (!res.ok) {
-        throw new Error(`Gemini embeddings failed: HTTP ${res.status}`);
+        throw new EmbeddingsHttpError(res.status);
     }
     const data = (await res.json()) as { embedding?: { values?: unknown } };
     const values = data.embedding?.values;

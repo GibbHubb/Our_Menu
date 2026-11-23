@@ -4,7 +4,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Bot } from "lucide-react";
 import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
-import { useAiEnabled } from "@/lib/useAiEnabled";  // OM35(c)
+import { useAiFeature } from "@/lib/useAiFeature";  // OM35(c), OM72
+import { readJsonSafe } from "@/lib/readJsonSafe";  // OM74
 
 interface Message {
     role: "user" | "assistant" | "system";
@@ -16,7 +17,8 @@ export default function AIChat() {
     // button opened a window that could only ever answer "Error connecting to
     // the chef's brain!". Hide it until a key exists; adding one in Vercel
     // brings it straight back with no code change.
-    const aiEnabled = useAiEnabled();
+    // OM72 — its own flag (`chat`); OM74 — hidden signed out too, since the route needs a session.
+    const aiEnabled = useAiFeature("chat");
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
         { role: "assistant", content: "Hello! I'm your kitchen assistant. How can I help you today?" }
@@ -50,10 +52,13 @@ export default function AIChat() {
                 })
             });
 
-            const data = await response.json();
+            const data = await readJsonSafe(response);  // OM74: a non-JSON error no longer throws
+            const reply = (data.choices as { message?: Message }[] | undefined)?.[0]?.message;
 
-            if (data.choices && data.choices[0]?.message) {
-                setMessages(prev => [...prev, data.choices[0].message]);
+            if (response.ok && reply) {
+                setMessages(prev => [...prev, reply]);
+            } else if (!response.ok && typeof data.error === "string") {
+                setMessages(prev => [...prev, { role: "assistant", content: data.error as string }]);
             } else {
                 setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I couldn't understand that." }]);
             }

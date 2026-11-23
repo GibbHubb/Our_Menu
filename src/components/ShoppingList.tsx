@@ -6,6 +6,8 @@ import { Check, Copy, HelpCircle, Loader2, ShoppingCart, ArrowRight } from "luci
 import Link from "next/link";
 import { ParsedItem, parseIngredientLine, formatQuantity } from "@/lib/recipeUtils";
 import { apiFetch } from "@/lib/apiFetch";  // OM35(b)
+import { useAiFeature } from "@/lib/useAiFeature";  // OM72, OM74
+import { readJsonSafe, errorText } from "@/lib/readJsonSafe";  // OM74
 import { copyLinesToList, toCopyLine } from "@/lib/shopping";  // OM49
 
 interface Substitution { name: string; note: string; }
@@ -28,6 +30,8 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, r
     const [subs, setSubs] = useState<Record<string, Substitution[]>>({});
     const [subsLoading, setSubsLoading] = useState<string | null>(null);
     const [subsError, setSubsError] = useState<Record<string, string>>({});
+    // OM72/OM74 — the "I don't have this" button follows the substitutions flag and is hidden signed out.
+    const subsOn = useAiFeature('substitutions');
     // OM49 — INCLUSION, not exclusion. Max + Bron, 2026-08-27: "we are no longer
     // treating this like a pantry tracker... we want the boxes to be blank to
     // start". This replaces OM42's `excluded` set, where everything was on the
@@ -50,9 +54,9 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, r
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ingredient: item.name, recipeName, recipeIngredients }),
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-            setSubs((prev) => ({ ...prev, [item.id]: data.substitutions ?? [] }));
+            const data = await readJsonSafe(res);
+            if (!res.ok) throw new Error(errorText(res, data));
+            setSubs((prev) => ({ ...prev, [item.id]: (data.substitutions as Substitution[] | undefined) ?? [] }));
         } catch (err) {
             setSubsError((prev) => ({ ...prev, [item.id]: err instanceof Error ? err.message : String(err) }));
         } finally {
@@ -329,6 +333,7 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, r
                                 </button>
 
                                 {/* OM8 — "I don't have this" button */}
+                                {subsOn === true && (
                                 <button
                                     onClick={(e) => { e.stopPropagation(); fetchSubstitutions(item); }}
                                     disabled={isLoadingSubs}
@@ -338,6 +343,7 @@ export default function ShoppingList({ initialList, scale, setScale, recipeId, r
                                 >
                                     {isLoadingSubs ? <Loader2 className="w-4 h-4 animate-spin" /> : <HelpCircle className="w-4 h-4" />}
                                 </button>
+                                )}
                             </div>
 
                             {/* Substitutions panel */}

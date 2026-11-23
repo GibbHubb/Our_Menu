@@ -2,7 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestUser } from '@/lib/supabaseServer';
-import { LlmError, llmConfigured, llmFailure, llmJson } from '@/lib/llm';
+import { LlmError, llmFailure, llmJson } from '@/lib/llm';
+import { aiFeatureOffError } from '@/lib/aiFeatures';
 
 interface Substitution {
     name: string;
@@ -15,14 +16,19 @@ export async function POST(req: NextRequest) {
     if (!(await getRequestUser(req))) {
         return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 });
     }
-    const { ingredient, recipeName, recipeIngredients } = await req.json();
+    // OM72 — per-feature switch (AI_DISABLE), checked before any work.
+    const off = aiFeatureOffError('substitutions', 'Substitutions are');
+    if (off) return NextResponse.json({ error: off }, { status: 503 });
+    let body: { ingredient?: unknown; recipeName?: unknown; recipeIngredients?: unknown };
+    try {
+        body = await req.json();
+    } catch {
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+    const { ingredient, recipeName, recipeIngredients } = body ?? {};
 
     if (!ingredient) {
         return NextResponse.json({ error: 'ingredient is required' }, { status: 400 });
-    }
-
-    if (!llmConfigured()) {
-        return NextResponse.json({ error: 'Substitutions are not configured (GEMINI_API_KEY missing)' }, { status: 503 });
     }
 
     const prompt = `You are a chef's assistant helping someone cook without a key ingredient.

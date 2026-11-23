@@ -19,7 +19,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { currentSeason, isInSeason, SEASON_LABEL, type Season } from "@/lib/seasons";
 import { DIETS, DIET_LABEL, dietMatches, type Diet } from "@/lib/diet";  // OM30
-import { useAiEnabled } from "@/lib/useAiEnabled";  // OM35(c)
+import { useAiFeature } from "@/lib/useAiFeature";  // OM35(c), OM72
+import { readJsonSafe, errorText } from "@/lib/readJsonSafe";  // OM74
+import { embedSyncSummary, type EmbedSyncResult } from "@/lib/embedSync";  // OM72
 import { useAuth } from "@/lib/AuthContext";
 import { useToast } from "./Toast";  // OM59
 
@@ -117,7 +119,31 @@ function MenuContent() {
     const [dietFilter, setDietFilter] = useState<Diet | null>(null);
 
     // OM35(c) — null until known, so nothing flashes for a key that is fine.
-    const aiEnabled = useAiEnabled();
+    // OM72 — per feature: the search bar (and the admin Sync, which only feeds search) and the
+    // post-save nutrition refresh each follow their own flag. OM74 — both false when signed out.
+    const searchOn = useAiFeature("search");
+    const nutritionOn = useAiFeature("nutrition");
+    const [syncing, setSyncing] = useState(false);
+    const [syncResult, setSyncResult] = useState<EmbedSyncResult | null>(null);
+    const [syncError, setSyncError] = useState("");
+
+    // OM72 — the embed route does a capped batch per press and reports what is left.
+    const handleSyncEmbeddings = async () => {
+        setSyncing(true);
+        setSyncError("");
+        try {
+            const res = await apiFetch('/api/recipes/embed', { method: 'POST' });
+            const data = await readJsonSafe(res);
+            if (!res.ok) throw new Error(errorText(res, data));
+            const result = data as unknown as EmbedSyncResult;
+            setSyncResult(result);
+            if (result.remaining === 0 && result.failed === 0) toast('Embeddings up to date.', { variant: "success" });
+        } catch (e: unknown) {
+            setSyncError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setSyncing(false);
+        }
+    };
 
     // OM39 — one way out of a filter combination that matches nothing.
     const clearFilters = () => {
@@ -128,13 +154,18 @@ function MenuContent() {
         setSearchTerm("");
     };
 
+    // OM72 — read once: the URL sync below rewrote the query string on mount and dropped
+    // `?admin=1`, so the admin Sync button vanished before it could be pressed.
+    const [adminMode] = useState(() => searchParams.get("admin") === "1");
+
     // Sync state to URL
     useEffect(() => {
         const params = new URLSearchParams();
         if (selectedCategory !== "All") params.set("category", selectedCategory);
         if (searchTerm) params.set("search", searchTerm);
+        if (adminMode) params.set("admin", "1");
         router.replace(`?${params.toString()}`, { scroll: false });
-    }, [selectedCategory, searchTerm, router]);
+    }, [selectedCategory, searchTerm, adminMode, router]);
 
     // Modals
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -156,9 +187,9 @@ function MenuContent() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: semanticQuery }),
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-            setSemanticResults(data.results ?? []);
+            const data = await readJsonSafe(res);  // OM74: a non-JSON error no longer throws a parse error
+            if (!res.ok) throw new Error(errorText(res, data));
+            setSemanticResults((data.results as Recipe[] | undefined) ?? []);
         } catch (e: unknown) {
             setSemanticError(e instanceof Error ? e.message : String(e));
             setSemanticResults(null);
@@ -251,6 +282,7 @@ function MenuContent() {
     // row when the estimator returns so the pill appears within a few seconds.
     const refreshNutrition = (recipe: Recipe) => {
         if (!recipe.ingredients || !recipe.ingredients.trim()) return;
+        if (nutritionOn !== true) return;  // OM72 — switched off, or signed out
         // OM35(b): this route writes to `recipes`, so it must arrive as the
         // signed-in user rather than leaning on the service-role key.
         apiFetch(`/api/nutrition/${recipe.id}`, { method: "POST" })
@@ -425,7 +457,7 @@ function MenuContent() {
                 </div>
             )}
 
-            {aiEnabled === true && !isGuest && (
+            {searchOn === true && !isGuest && (
             <div className="max-w-7xl mx-auto px-4 pt-4">
                 <form onSubmit={handleSemanticSearch} className="flex gap-2">
                     <div className="relative flex-1">
@@ -467,18 +499,22 @@ function MenuContent() {
                     </p>
                 )}
                 {/* Admin-only: sync embeddings — visible at ?admin=1 */}
-                {searchParams.get('admin') === '1' && (
-                    <button
-                        onClick={async () => {
-                            await apiFetch('/api/recipes/embed', { method: 'POST' });
-                            // OM59 — was a browser alert box: 'Embeddings synced!'. Admin-only
-                            // background action; timed toast.
-                            toast('Embeddings synced!', { variant: "success" });
-                        }}
-                        className="mt-2 text-xs px-3 py-1 border border-stone-300 rounded-full text-stone-500 hover:bg-stone-100"
-                    >
-                        Sync embeddings
-                    </button>
+                {/* OM72 — each press embeds a capped batch of recipes with no vector yet and says how
+                    many remain; press again until 0. Was a blind 'Embeddings synced!' toast. */}
+                {adminMode && (
+                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <button
+                            onClick={handleSyncEmbeddings}
+                            disabled={syncing}
+                            className="text-xs px-3 py-1 border border-stone-300 rounded-full text-stone-500 hover:bg-stone-100 disabled:opacity-60"
+                        >
+                            {syncing ? 'Syncing…' : syncResult && syncResult.remaining > 0 ? 'Sync next batch' : 'Sync embeddings'}
+                        </button>
+                        {syncResult && (
+                            <span className="text-xs text-stone-500" role="status">{embedSyncSummary(syncResult)}</span>
+                        )}
+                        {syncError && <span className="text-xs text-red-600" role="alert">{syncError}</span>}
+                    </div>
                 )}
             </div>
             )}

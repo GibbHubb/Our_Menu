@@ -5,24 +5,26 @@
 // Rate-limit: refuses to call the LLM (Gemini, OM73) more than once per 60 s for the same recipe.
 
 import { NextRequest, NextResponse } from "next/server";
-import { createRequestClient } from "@/lib/supabaseServer";
+import { createRequestClient, getRequestUser } from "@/lib/supabaseServer";
 import { NUTRITION_PROMPT, hashIngredients, parseNutritionResponse } from "@/lib/nutrition";
-import { llmConfigured, llmFailure, llmJson } from "@/lib/llm";
+import { llmFailure, llmJson } from "@/lib/llm";
+import { aiFeatureOffError } from "@/lib/aiFeatures";
 
 const RATE_LIMIT_SECONDS = 60;
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+    // OM74 — signed-in callers only, like the sibling AI routes (OM55, OM73), before any DB or LLM work.
+    // RLS already 404'd an anonymous caller before the LLM call; this makes it explicit and consistent.
+    if (!(await getRequestUser(req))) {
+        return NextResponse.json({ error: "Sign in to use this." }, { status: 401 });
+    }
     const { id } = await ctx.params;
     if (!id) return NextResponse.json({ error: "Missing recipe id" }, { status: 400 });
 
     const force = req.nextUrl.searchParams.get("force") === "1";
 
-    if (!llmConfigured()) {
-        return NextResponse.json(
-            { error: "Nutrition estimates aren't configured (GEMINI_API_KEY missing)" },
-            { status: 503 },
-        );
-    }
+    const off = aiFeatureOffError("nutrition", "Nutrition estimates are");  // OM72
+    if (off) return NextResponse.json({ error: off }, { status: 503 });
 
     // OM35(b): was a SERVICE-ROLE client bypassing RLS, so any guessed recipe
     // id was readable and writable. The caller's session now arrives via

@@ -3,7 +3,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createRequestClient, getRequestUser } from '@/lib/supabaseServer';
-import { embedText, embeddingsConfigured } from '@/lib/embeddings';
+import { embedText } from '@/lib/embeddings';
+import { aiFeatureOffError } from '@/lib/aiFeatures';
 
 export async function POST(req: NextRequest) {
     // OM73 — signed-in callers only: each search spends a Gemini embedding call.
@@ -21,9 +22,8 @@ export async function POST(req: NextRequest) {
     // OM14c — search the caller's own recipes, not the anonymous view.
     const supabase = createRequestClient(req);
 
-    if (!embeddingsConfigured()) {
-        return NextResponse.json({ error: 'Semantic search is not configured (GEMINI_API_KEY missing)' }, { status: 503 });
-    }
+    const off = aiFeatureOffError('search', 'Semantic search is');  // OM72
+    if (off) return NextResponse.json({ error: off }, { status: 503 });
 
     let embedding: number[];
     try {

@@ -2,7 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestUser } from '@/lib/supabaseServer';
-import { llmConfigured, llmFailure, llmJson } from '@/lib/llm';
+import { llmFailure, llmJson } from '@/lib/llm';
+import { aiFeatureOffError } from '@/lib/aiFeatures';
 
 // Vision on a long receipt can take a while; the LLM call itself aborts at 45 s (src/lib/llm.ts).
 export const maxDuration = 60;
@@ -22,9 +23,8 @@ export async function POST(req: NextRequest) {
     if (!(await getRequestUser(req))) {
         return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 });
     }
-    if (!llmConfigured()) {
-        return NextResponse.json({ error: 'Receipt scanning is not configured (GEMINI_API_KEY missing)' }, { status: 503 });
-    }
+    const off = aiFeatureOffError('receipts', 'Receipt scanning is');  // OM72
+    if (off) return NextResponse.json({ error: off }, { status: 503 });
     let formData: FormData;
     try {
         formData = await req.formData();

@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/supabaseServer";
 import { CHAT_COMPLETIONS_URL, LLM_MODEL, llmHeaders } from "@/lib/llm";
+import { aiFeatureOffError } from "@/lib/aiFeatures";
 
 export async function POST(req: Request) {
     // OM55 — signed-in callers only. This route calls a paid/LLM backend (or fetches an arbitrary
@@ -9,6 +10,9 @@ export async function POST(req: Request) {
     if (!(await getRequestUser(req))) {
         return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 });
     }
+    // OM72 — per-feature switch; also stops a keyless call going out (this route never checked).
+    const off = aiFeatureOffError("chat", "Chat is");
+    if (off) return NextResponse.json({ error: off }, { status: 503 });
     try {
         const body = await req.json();
         const { messages } = body;

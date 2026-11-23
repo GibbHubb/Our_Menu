@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';  // OM70
 import { apiFetch } from '@/lib/apiFetch';
 import type { Recipe } from '@/lib/types';
-import { useAiEnabled } from '@/lib/useAiEnabled';  // OM35(c)
+import { useAiFeature } from '@/lib/useAiFeature';  // OM35(c), OM72
+import { readJsonSafe, errorText } from '@/lib/readJsonSafe';  // OM74
 
 interface PlanDay {
     day: number;
@@ -20,7 +21,7 @@ interface MealPlan {
 }
 
 export default function MealPlanPage() {
-    const aiEnabled = useAiEnabled();  // OM35(c)
+    const aiEnabled = useAiFeature('mealPlan');  // OM35(c); OM72: its own flag
     const [pantry, setPantry] = useState('');
     const [dietary, setDietary] = useState('none');
     const [days, setDays] = useState(7);
@@ -59,9 +60,9 @@ export default function MealPlanPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pantry, dietary, days }),
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-            setPlan(data.plan);
+            const data = await readJsonSafe(res);  // OM74: a timeout's HTML 504 no longer throws a parse error
+            if (!res.ok) throw new Error(errorText(res, data));
+            setPlan(data.plan as MealPlan);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : String(e));
         } finally {
@@ -82,8 +83,7 @@ export default function MealPlanPage() {
                 body: JSON.stringify({ plan, preferences: { pantry, dietary, days } }),
             });
             if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.error || `HTTP ${res.status}`);
+                throw new Error(errorText(res, await readJsonSafe(res)));
             }
             setSaved(true);
         } catch (e: unknown) {
@@ -133,7 +133,7 @@ export default function MealPlanPage() {
                 <button
                     onClick={generate}
                     disabled={loading || aiEnabled !== true}
-                    title={aiEnabled === false ? 'Meal-plan generation needs an AI key, which this deployment does not have.' : undefined}
+                    title={aiEnabled === false ? 'Meal-plan generation is switched off on this deployment.' : undefined}
                     style={{
                         padding: '10px 24px',
                         background: '#1a1a2e',
@@ -151,10 +151,10 @@ export default function MealPlanPage() {
             </div>
 
             {/* OM35(c) — say why rather than 503 on click. */}
-            {aiEnabled === false && (
+            {aiEnabled === false && user && (
                 <p style={{ fontSize: '13px', color: '#8a8a8a', marginTop: '-8px', marginBottom: '16px' }}>
-                    Meal-plan generation is off: this deployment has no AI key configured. Everything
-                    else — recipes, the shopping list and the pantry — works without one.
+                    Meal-plan generation is switched off on this deployment. Everything else (recipes,
+                    the shopping list and the pantry) works without it.
                 </p>
             )}
 
