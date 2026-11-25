@@ -2,7 +2,8 @@
 
 What the database means. The DDL lives in `supabase/migrations/` (numbered, applied in order); this file explains it.
 Verified against the live `public` schema on 2026-11-17 (OM63): **16 tables, 48 RLS policies, 7 triggers, 14 app
-functions**.
+functions**. **028** (OM69) drops the two backup tables and their `deny_all` policies, leaving 14 tables and 46
+policies once it has run.
 
 ## Where this database lives (read before touching a policy)
 
@@ -159,7 +160,7 @@ What the household has in. Introduced by **008**; `category` by **022**.
 | household_id | uuid → households | 016 |
 | category | text NOT NULL | `kitchen` (default) / `bathroom` / `household` (CHECK). Only `kitchen` counts toward "cookable now" |
 
-The `needed` flag that 020 added was **dropped under OM50** (see Drift).
+The `needed` flag that 020 added was **dropped under OM50** by hand; **028** records the drop.
 **RLS:** household shape. **Trigger:** `trg_stamp_household`.
 
 ### recipe_reviews
@@ -240,7 +241,7 @@ row here, copied from recipes when the user presses Add rather than derived live
 | family | text | `mass` / `volume` / `count`; lines merge only within a family (023) |
 | unit_hint | text | unit to render back in (023) |
 
-The `checked` column 020 created was **dropped under OM50**; ticks live in `shopping_ticks`.
+The `checked` column 020 created was **dropped under OM50** by hand (recorded by **028**); ticks live in `shopping_ticks`.
 **RLS:** strict household shape. **Trigger:** `trg_stamp_household`.
 
 ### shopping_ticks
@@ -274,17 +275,12 @@ Browser errors reported through `/api/client-error` (OM61). Introduced by **026*
 **RLS:** write-only. One INSERT policy for `anon, authenticated` with `user_id = auth.uid() OR user_id IS NULL`; no
 SELECT/UPDATE/DELETE policy, so only the service role can read rows back.
 
-### recipes_backup_om40
-**Hand-made backup, not in any migration.** All 96 recipes' `id, title, ingredients, instructions, shopping_list` as
-they were before the OM40 ingredient rewrite (2026-08), plus `backed_up_at`. No app code reads it.
-**RLS:** on, with a single `deny_all` policy (USING false); grants revoked. Both from **025**.
-
-### recipes_orphan_backup_2026_08_26
-**Hand-made backup, not in any migration.** Every column of the 82 orphaned recipes (Bron's) deleted on 2026-08-26,
-plus `backed_up_at`. No app code reads it. **RLS:** `deny_all`, from **025**.
-
-Both backup tables are candidates for removal once Max confirms nothing in them is wanted. That is a DDL decision for
-Max; nothing in this repo drops them.
+### Removed: recipes_backup_om40, recipes_orphan_backup_2026_08_26
+Two hand-made backup tables no migration created: the 96 recipes' `id, title, ingredients, instructions,
+shopping_list` from before the OM40 ingredient rewrite (2026-08), and every column of the 82 orphaned recipes (Bron's)
+deleted on 2026-08-26. No app code read either; 025 locked them down. Max decided (OM69, 2026-11-25) to export and
+drop them: both were exported in full to backlog_bandit `reports/our_menu/om69_backup_export_2026-11-25/` (96 and 82
+rows, counts verified) and **028** drops them, refusing if either row count has changed since the export.
 
 ## Relationships
 
@@ -338,12 +334,12 @@ for `public` (16 tables):
 | Difference | Why |
 |---|---|
 | `recipes` is live; no migration creates it | predates the numbered sequence; its DDL is in `supabase/legacy/` |
-| `recipes_backup_om40`, `recipes_orphan_backup_2026_08_26` are live; no migration creates them | hand-made backups (above) |
-| `meal_basket` is created by 020; absent live | **dropped by hand under OM50 (2026-09-22)**, together with `pantry_items.needed` and `shopping_extras.checked`. No migration file records that drop. |
+| `recipes_backup_om40`, `recipes_orphan_backup_2026_08_26` are live; no migration creates them | hand-made backups (above). **Closed by 028 (OM69)**, which drops both. |
+| `meal_basket` is created by 020; absent live | **dropped by hand under OM50 (2026-09-22)**, together with `pantry_items.needed` and `shopping_extras.checked`. **Closed by 028 (OM69)**, which records the drop (`IF EXISTS`, a no-op on prod). |
 
-So a database rebuilt from `001` to `026` alone would lack `recipes` (001 would fail on its FK) and would still have
-the three OM50 objects. A rebuild needs `supabase/legacy/supabase_schema.sql` and the two legacy column scripts first,
-and the OM50 drop at the end. Recording the OM50 drop as a numbered migration is an open follow-up.
+So a database rebuilt from `001` alone would lack `recipes` (001 would fail on its FK). A rebuild needs
+`supabase/legacy/supabase_schema.sql` and the two legacy column scripts first; after that, `001` to `028` end at the
+live shape. Once 028 has run on prod, the only remaining difference is `recipes` predating the numbered sequence.
 
 ## Migrations
 

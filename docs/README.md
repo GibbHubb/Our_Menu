@@ -37,3 +37,7 @@ Entry point for all project documentation. Each doc is linked below with a one-l
 |----------|-------------|
 | [reference/full-documentation-set.md](reference/full-documentation-set.md) | Exhaustive list of docs a mature SaaS maintains |
 | [reference/resources.md](reference/resources.md) | Curated links to industry templates and standards |
+
+## Archive
+
+Historical notes from before `docs/` existed (moved from the repo root under OM69): [archive/UPDATES.md](archive/UPDATES.md) (Feb 2026 feature summary) and [archive/PROD_READINESS.md](archive/PROD_READINESS.md) (Apr 2026 task list). Not current; do not run any SQL in them.

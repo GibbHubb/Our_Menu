@@ -1,6 +1,6 @@
-> **Historical (OM63, 2026-11-17).** Written early in 2026 (UPDATES Feb, PROD_READINESS Apr), before `docs/` existed. Kept as a record;
+> **Historical (OM63, 2026-11-17; moved to `docs/archive/` under OM69).** Written early in 2026 (UPDATES Feb, PROD_READINESS Apr), before `docs/` existed. Kept as a record;
 > it is not current. Do not run any SQL it mentions: the schema is `supabase/migrations/`, explained in
-> [`docs/technical/data-model.md`](docs/technical/data-model.md); the architecture is [`docs/technical/architecture.md`](docs/technical/architecture.md).
+> [`docs/technical/data-model.md`](../technical/data-model.md); the architecture is [`docs/technical/architecture.md`](../technical/architecture.md).
 
 # Our_Menu — Prod Readiness
 
