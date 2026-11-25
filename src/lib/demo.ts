@@ -8,6 +8,8 @@ import { INITIAL_RECIPES } from "./initialData";
 import type { Category, Recipe } from "./types";
 
 export const DEMO_ID_PREFIX = "demo-";
+/** OM71 — where the pre-generated demo photos are served from (public/demo/). */
+export const DEMO_IMAGE_DIR = "/demo";
 
 // A fixed timestamp so the list renders identically on server and client.
 const DEMO_CREATED_AT = "2026-01-01T00:00:00.000Z";
@@ -37,10 +39,11 @@ function buildDemoRecipes(): Recipe[] {
             created_at: DEMO_CREATED_AT,
             title: seed.title,
             category: (seed.category ?? []) as Category[],
-            // pollinations.ai's free tier answers most requests with a "Free
-            // limit reached" banner image (seen in OM70's verify run), so a
-            // demo card uses the card's own plate placeholder instead.
-            image_url: seed.image_url && !seed.image_url.includes("pollinations.ai") ? seed.image_url : "",
+            // OM71 — each demo recipe has its own photo, generated ONCE and
+            // stored in public/demo/<slug>.webp. Never the live pollinations.ai
+            // URL from the seed: its free tier answers most requests with a
+            // "Free limit reached" banner image (seen in OM70's verify run).
+            image_url: `${DEMO_IMAGE_DIR}/${slug}.webp`,
             user_id: null,
             household_id: null,
             is_public: false,

@@ -1,6 +1,8 @@
 // OM70 — the demo kitchen guests see without logging in.
 import { describe, it, expect } from "vitest";
-import { DEMO_RECIPES, getDemoRecipe, isDemoId, DEMO_ID_PREFIX } from "../demo";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { DEMO_RECIPES, getDemoRecipe, isDemoId, DEMO_ID_PREFIX, DEMO_IMAGE_DIR } from "../demo";
 import { INITIAL_RECIPES } from "../initialData";
 import { rejectWrong } from "./control";
 
@@ -40,6 +42,17 @@ describe("OM70 demo kitchen", () => {
         // OM70: its free tier answers most requests with a "Free limit reached"
         // banner image, which is what a recruiter clicking the link would see.
         for (const r of DEMO_RECIPES) expect(r.image_url).not.toContain("pollinations.ai");
+    });
+
+    it("OM71: every demo recipe has its own stored photo, and every file exists", () => {
+        // The photos are generated once and committed under public/demo/, so a
+        // guest's page never depends on a third-party image service.
+        const missing = DEMO_RECIPES.filter((r) => {
+            if (!r.image_url.startsWith(`${DEMO_IMAGE_DIR}/`)) return true;
+            return !existsSync(path.join(process.cwd(), "public", r.image_url));
+        }).map((r) => r.image_url);
+        expect(missing).toEqual([]);
+        expect(new Set(DEMO_RECIPES.map((r) => r.image_url)).size).toBe(DEMO_RECIPES.length);
     });
 
     it("tells demo ids from real (uuid) ids", () => {
