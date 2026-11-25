@@ -14,6 +14,9 @@ interface Message {
 
 export default function ChatAgent() {
     // OM72 — follows the `chat` flag (it never checked any flag); OM74 — hidden signed out.
+    // OM75 — the only chat: AIChat ("Ask Chef", same corner, same /api/chat) is gone. This one won
+    // because it sends a system prompt, surfaces the server's error text, caps its height at 70vh and
+    // toggles from one button. It is mounted once, in the root layout, so it is on every page.
     const chatOn = useAiFeature("chat");
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
@@ -160,11 +163,14 @@ export default function ChatAgent() {
 
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="pointer-events-auto p-4 bg-stone-900 text-white rounded-full shadow-lg hover:bg-stone-800 transition-transform hover:scale-105 active:scale-95 flex items-center justify-center shrink-0"
+                className="pointer-events-auto p-4 bg-stone-900 text-white rounded-full shadow-lg hover:bg-stone-800 transition-transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 shrink-0"
                 title="AI Kitchen Assistant"
                 aria-label="AI kitchen assistant"
+                aria-expanded={isOpen}
             >
                 {isOpen ? <X className="w-6 h-6" /> : <MessageSquare className="w-6 h-6" />}
+                {/* OM75 — the label the removed AIChat button carried, so the button reads the same. */}
+                {!isOpen && <span className="font-bold hidden sm:inline">Ask Chef</span>}
             </button>
         </div>
     );

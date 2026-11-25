@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, { useEffect, useRef, useState, use } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiFetch } from "@/lib/apiFetch";
+import { saveThenDropStale, dropStaleEmbedding } from "@/lib/staleEmbedding";  // OM75
 import { Recipe } from "@/lib/types";
 import { CATEGORIES } from "@/lib/constants";
 import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Pencil, Sparkles, Loader2, AlertTriangle, AlertCircle, X, ChefHat } from "lucide-react";
@@ -34,6 +35,8 @@ function RecipeDetail({ id }: { id: string }) {
     const router = useRouter();
 
     const [recipe, setRecipe] = useState<Recipe | null>(null);
+    // OM75 — the last version known to be in the database (moves only on a successful save).
+    const persistedRef = useRef<Recipe | null>(null);
     const [loading, setLoading] = useState(true);
     // OM59 — was two browser alert boxes: "Failed to save! Error: ${error.message}…
     // Tip: Run 'repair_database.sql'" (now supabase/legacy/, never run it) and a permission-denied variant with the
@@ -97,6 +100,7 @@ function RecipeDetail({ id }: { id: string }) {
                 console.error(error);
             } else {
                 setRecipe(data as Recipe);
+                persistedRef.current = data as Recipe;  // OM75
                 setNotes(data.notes || "");
                 setShoppingList(data.shopping_list || "");
             }
@@ -113,6 +117,14 @@ function RecipeDetail({ id }: { id: string }) {
         setShoppingList(updated.shopping_list || "");
         setSaveError(null);
 
+        // OM75 — diff against what is STORED, not the optimistic `recipe` state: after a failed save
+        // `recipe` already holds the edit, and the retry would see "no change" and keep the stale vector.
+        // saveThenDropStale drops the vector only after the update succeeds, and only if the title,
+        // ingredients or method changed (a notes-only save leaves it alone).
+        await saveThenDropStale(persistedRef, updated, () => saveRecipeRow(updated), (rid) => dropStaleEmbedding(supabase, rid));
+    };
+
+    const saveRecipeRow = async (updated: Recipe) => {
         // Exclude UI-only fields if any (though Recipe type maps to DB 1:1)
         const { data, error } = await supabase
             .from("recipes")
@@ -186,6 +198,7 @@ function RecipeDetail({ id }: { id: string }) {
             }
             const updatedRecipe = data.recipe as Recipe;
             setRecipe(updatedRecipe);
+            persistedRef.current = updatedRecipe;  // OM75 — the route wrote this (and dropped the vector)
             setShoppingList(updatedRecipe.shopping_list || "");
             const fields: string[] = data.updated || [];
             const path: string = data.sourcePath || "";

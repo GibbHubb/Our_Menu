@@ -10,7 +10,6 @@ import MasonryGrid from "./MasonryGrid";
 import AddRecipeModal, { type AddRecipePayload } from "./AddRecipeModal";
 import EditRecipeModal from "./EditRecipeModal";
 import DecisionMaker from "./DecisionMaker";
-import ChatAgent from "./ChatAgent";
 import CollectionBar from "./CollectionBar";
 import { Plus, Wand2, Sparkles, X } from "lucide-react";
 import { INITIAL_RECIPES } from "@/lib/initialData";
@@ -22,6 +21,7 @@ import { DIETS, DIET_LABEL, dietMatches, type Diet } from "@/lib/diet";  // OM30
 import { useAiFeature } from "@/lib/useAiFeature";  // OM35(c), OM72
 import { readJsonSafe, errorText } from "@/lib/readJsonSafe";  // OM74
 import { embedSyncSummary, type EmbedSyncResult } from "@/lib/embedSync";  // OM72
+import { saveThenDropStale, dropStaleEmbedding } from "@/lib/staleEmbedding";  // OM75
 import { useAuth } from "@/lib/AuthContext";
 import { useToast } from "./Toast";  // OM59
 
@@ -337,6 +337,13 @@ function MenuContent() {
 
     // Update Recipe Handler
     const handleUpdateRecipe = async (updated: Recipe) => {
+        // OM75 — `recipes` changes only after a successful save, so it is the stored version. The vector
+        // is dropped only after the update succeeds, and only if title/ingredients/method changed.
+        const persisted = { current: recipes.find((r) => r.id === updated.id) };
+        await saveThenDropStale(persisted, updated, () => saveRecipeRow(updated), (rid) => dropStaleEmbedding(supabase, rid));
+    };
+
+    const saveRecipeRow = async (updated: Recipe) => {
         const { error } = await supabase.from("recipes").update(updated).eq("id", updated.id);
         if (error) {
             // OM59 — was a browser alert box: "Error updating recipe! " + error.message
@@ -683,9 +690,9 @@ function MenuContent() {
                 onClose={() => setIsDecisionOpen(false)}
                 recipes={filteredRecipes}
             />
-
-            {/* OM70 — the chat spends model quota and its route needs a session. */}
-            {!showingDemo && <ChatAgent />}
+            {/* OM75 — the chat (ChatAgent) is mounted once, in the root layout, so it is on every page
+                and never doubled here. It hides itself signed out via useAiFeature("chat"), which is
+                what the OM70 `!showingDemo` guard here was for. */}
         </AppShell>
     );
 }
