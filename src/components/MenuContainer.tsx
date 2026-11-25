@@ -21,7 +21,7 @@ import { DIETS, DIET_LABEL, dietMatches, type Diet } from "@/lib/diet";  // OM30
 import { useAiFeature } from "@/lib/useAiFeature";  // OM35(c), OM72
 import { readJsonSafe, errorText } from "@/lib/readJsonSafe";  // OM74
 import { embedSyncSummary, type EmbedSyncResult } from "@/lib/embedSync";  // OM72
-import { embeddingTextChanged, dropStaleEmbedding } from "@/lib/staleEmbedding";  // OM75
+import { saveThenDropStale, dropStaleEmbedding } from "@/lib/staleEmbedding";  // OM75
 import { useAuth } from "@/lib/AuthContext";
 import { useToast } from "./Toast";  // OM59
 
@@ -337,7 +337,13 @@ function MenuContent() {
 
     // Update Recipe Handler
     const handleUpdateRecipe = async (updated: Recipe) => {
-        const before = recipes.find((r) => r.id === updated.id);
+        // OM75 — `recipes` changes only after a successful save, so it is the stored version. The vector
+        // is dropped only after the update succeeds, and only if title/ingredients/method changed.
+        const persisted = { current: recipes.find((r) => r.id === updated.id) };
+        await saveThenDropStale(persisted, updated, () => saveRecipeRow(updated), (rid) => dropStaleEmbedding(supabase, rid));
+    };
+
+    const saveRecipeRow = async (updated: Recipe) => {
         const { error } = await supabase.from("recipes").update(updated).eq("id", updated.id);
         if (error) {
             // OM59 — was a browser alert box: "Error updating recipe! " + error.message
@@ -351,8 +357,6 @@ function MenuContent() {
 
         setRecipes((prev) => prev.map(r => r.id === updated.id ? updated : r));
         refreshNutrition(updated);
-        // OM75 — new title/ingredients/method: drop the old vector so the next Sync re-embeds it.
-        if (embeddingTextChanged(before, updated)) void dropStaleEmbedding(supabase, updated.id);
     };
 
     const handleOpenEdit = (recipe: Recipe) => {

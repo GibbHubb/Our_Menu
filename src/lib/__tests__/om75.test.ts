@@ -1,76 +1,150 @@
-// OM75 — one chat button, no stale recipe vectors after an edit, no EXIF-rotated JPEG pass-through.
-import { describe, it, expect, vi } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
-import path from 'node:path';
+// OM75 — no stale recipe vectors after an edit, no EXIF-rotated JPEG pass-through.
+// (The one-chat behaviour is in om75.chat.test.ts; the extract route in om75.extract.test.ts.)
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rejectWrong } from './control';
 import { canPassThrough, PASS_THROUGH_BYTES } from '@/lib/imageDownscale';
-import { embeddingTextChanged, dropStaleEmbedding, type EmbeddingDeleteClient } from '@/lib/staleEmbedding';
+import {
+    embeddingTextChanged,
+    dropStaleEmbedding,
+    saveThenDropStale,
+    type DropResult,
+    type EmbeddingDeleteClient,
+} from '@/lib/staleEmbedding';
 
-const src = (p: string) => readFileSync(path.resolve(__dirname, '../..', p), 'utf8');
+afterEach(() => vi.restoreAllMocks());
 
-/** A fake client recording the one delete call; `result` is what the delete resolves (or throws). */
-function fakeClient(result: { error: { message: string } | null } | Error) {
-    const calls: { table: string; column: string; value: string }[] = [];
+type DeleteReply = { data: { recipe_id: string }[] | null; error: { message: string } | null };
+
+/** A fake client recording the one delete call; `reply` is what the delete resolves (or throws). */
+function fakeClient(reply: DeleteReply | Error) {
+    const calls: { table: string; column: string; value: string; returning: string }[] = [];
     const client: EmbeddingDeleteClient = {
         from: (table) => ({
             delete: () => ({
-                eq: (column, value) => {
-                    calls.push({ table, column, value });
-                    return result instanceof Error ? Promise.reject(result) : Promise.resolve(result);
-                },
+                eq: (column, value) => ({
+                    select: (returning) => {
+                        calls.push({ table, column, value, returning });
+                        return reply instanceof Error ? Promise.reject(reply) : Promise.resolve(reply);
+                    },
+                }),
             }),
         }),
     };
     return { client, calls };
 }
 
-describe('OM75 (1) one chat', () => {
-    it('the layout mounts ChatAgent, AIChat is gone, and MenuContainer no longer renders its own', () => {
-        expect(src('app/layout.tsx')).toMatch(/import ChatAgent from "@\/components\/ChatAgent"/);
-        expect(src('app/layout.tsx')).toMatch(/<ChatAgent \/>/);
-        expect(existsSync(path.resolve(__dirname, '../../components/AIChat.tsx'))).toBe(false);
-        expect(src('components/MenuContainer.tsx')).not.toMatch(/<ChatAgent|import ChatAgent/);
+const stored = { id: 'r1', title: 'Pasta', ingredients: 'pasta\ntomato', instructions: 'Boil.', notes: 'old' };
+
+/** A save that fails `failures` times, then succeeds; and a drop that records its calls. */
+function harness(failures = 0) {
+    const log: string[] = [];
+    let left = failures;
+    const save = vi.fn(async () => {
+        await Promise.resolve();
+        if (left-- > 0) {
+            log.push('save-failed');
+            throw new Error('network');
+        }
+        log.push('saved');
     });
-
-    it('the kept chat still obeys the per-feature `chat` flag (which hides it signed out)', () => {
-        const chat = src('components/ChatAgent.tsx');
-        expect(chat).toMatch(/useAiFeature\("chat"\)/);
-        expect(chat).toMatch(/if \(chatOn !== true\) return null;/);
+    const drop = vi.fn(async (id: string): Promise<DropResult> => {
+        log.push(`drop:${id}`);
+        return 'deleted';
     });
-});
+    return { log, save, drop };
+}
 
-describe('OM75 (2) stale embeddings', () => {
-    const r = { title: 'Pasta', ingredients: 'pasta\ntomato', instructions: 'Boil.' };
-
+describe('OM75 (2) embeddingTextChanged', () => {
     it('a title, ingredient or method change marks the vector stale', () => {
-        expect(embeddingTextChanged(r, { ...r, title: 'Penne' })).toBe(true);
-        expect(embeddingTextChanged(r, { ...r, ingredients: 'pasta\nbasil' })).toBe(true);
-        expect(embeddingTextChanged(r, { ...r, instructions: 'Boil well.' })).toBe(true);
-        expect(embeddingTextChanged(undefined, r)).toBe(true);
+        expect(embeddingTextChanged(stored, { ...stored, title: 'Penne' })).toBe(true);
+        expect(embeddingTextChanged(stored, { ...stored, ingredients: 'pasta\nbasil' })).toBe(true);
+        expect(embeddingTextChanged(stored, { ...stored, instructions: 'Boil well.' })).toBe(true);
+        expect(embeddingTextChanged(undefined, stored)).toBe(true);
     });
 
     it('a save that leaves that text alone (notes, rating, photo) keeps the vector', () => {
-        expect(embeddingTextChanged(r, { ...r })).toBe(false);
-        expect(embeddingTextChanged({ ...r, notes: 'old' } as typeof r, { ...r, notes: 'new' } as typeof r)).toBe(false);
+        expect(embeddingTextChanged(stored, { ...stored })).toBe(false);
+        expect(embeddingTextChanged(stored, { ...stored, notes: 'new' } as typeof stored)).toBe(false);
+    });
+});
+
+describe('OM75 (2) saveThenDropStale', () => {
+    it('a failed save then a successful retry of the same edit drops the vector (review MUST)', async () => {
+        const persisted = { current: stored };
+        const edit = { ...stored, ingredients: 'pasta\nbasil' };
+        const { log, save, drop } = harness(1);
+
+        await expect(saveThenDropStale(persisted, edit, save, drop)).rejects.toThrow('network');
+        expect(drop).not.toHaveBeenCalled();
+        expect(persisted.current).toBe(stored);  // still the stored version, not the failed edit
+
+        expect(await saveThenDropStale(persisted, edit, save, drop)).toBe('deleted');
+        expect(drop).toHaveBeenCalledTimes(1);
+        expect(drop).toHaveBeenCalledWith('r1');
+        expect(persisted.current).toBe(edit);
+        expect(log).toEqual(['save-failed', 'saved', 'drop:r1']);
     });
 
-    it('drops exactly that recipe\'s row from recipe_embeddings', async () => {
-        const { client, calls } = fakeClient({ error: null });
-        expect(await dropStaleEmbedding(client, 'abc')).toBe(true);
-        expect(calls).toEqual([{ table: 'recipe_embeddings', column: 'recipe_id', value: 'abc' }]);
+    it('a notes-only save keeps the vector', async () => {
+        const persisted = { current: stored };
+        const { save, drop } = harness();
+        expect(await saveThenDropStale(persisted, { ...stored, notes: 'new' }, save, drop)).toBe('kept');
+        expect(save).toHaveBeenCalledTimes(1);
+        expect(drop).not.toHaveBeenCalled();
     });
 
-    it('a failed delete never fails the save: it reports false and does not throw', async () => {
-        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        expect(await dropStaleEmbedding(fakeClient({ error: { message: 'rls' } }).client, 'abc')).toBe(false);
-        expect(await dropStaleEmbedding(fakeClient(new Error('offline')).client, 'abc')).toBe(false);
-        spy.mockRestore();
+    it('drops only after the update has succeeded, never on a failed one', async () => {
+        const edit = { ...stored, title: 'Penne' };
+        const ok = harness();
+        await saveThenDropStale({ current: stored }, edit, ok.save, ok.drop);
+        expect(ok.log).toEqual(['saved', 'drop:r1']);
+
+        const bad = harness(5);
+        await expect(saveThenDropStale({ current: stored }, edit, bad.save, bad.drop)).rejects.toThrow();
+        expect(bad.log).toEqual(['save-failed']);
+        expect(bad.drop).not.toHaveBeenCalled();
     });
 
-    it('every save path that can change the embedded text drops the vector', () => {
-        expect(src('components/MenuContainer.tsx')).toMatch(/embeddingTextChanged\(before, updated\)\) void dropStaleEmbedding\(supabase, updated\.id\)/);
-        expect(src('app/recipe/[id]/page.tsx')).toMatch(/embeddingTextChanged\(before, updated\)\) await dropStaleEmbedding\(supabase, updated\.id\)/);
-        expect(src('app/api/recipes/[id]/extract/route.ts')).toMatch(/await dropStaleEmbedding\(supabase, id\)/);
+    it('a second edit after a successful one is diffed against the new stored text', async () => {
+        const persisted = { current: stored };
+        const edit = { ...stored, title: 'Penne' };
+        const { save, drop } = harness();
+        await saveThenDropStale(persisted, edit, save, drop);
+        expect(await saveThenDropStale(persisted, { ...edit, notes: 'x' }, save, drop)).toBe('kept');
+        expect(drop).toHaveBeenCalledTimes(1);
+    });
+
+    it('CONTROL: the retry after a failed save is not a no-op for the vector', async () => {
+        // Goes red under OM54_INVERT_CONTROLS=1. The known-wrong answer is the review's bug: the retry
+        // diffed against the optimistic (already edited) state, saw no change, and dropped nothing.
+        const persisted = { current: stored };
+        const edit = { ...stored, instructions: 'Boil well.' };
+        const { save, drop } = harness(1);
+        await saveThenDropStale(persisted, edit, save, drop).catch(() => undefined);
+        await saveThenDropStale(persisted, edit, save, drop);
+        rejectWrong(drop.mock.calls.length, 0);
+    });
+});
+
+describe('OM75 (2) dropStaleEmbedding', () => {
+    it("deletes exactly that recipe's row and asks for it back", async () => {
+        const { client, calls } = fakeClient({ data: [{ recipe_id: 'abc' }], error: null });
+        expect(await dropStaleEmbedding(client, 'abc')).toBe('deleted');
+        expect(calls).toEqual([{ table: 'recipe_embeddings', column: 'recipe_id', value: 'abc', returning: 'recipe_id' }]);
+    });
+
+    it('zero rows back (no vector yet, or RLS filtered it) is "none" and logs a warning', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        expect(await dropStaleEmbedding(fakeClient({ data: [], error: null }).client, 'abc')).toBe('none');
+        expect(await dropStaleEmbedding(fakeClient({ data: null, error: null }).client, 'abc')).toBe('none');
+        expect(warn).toHaveBeenCalledTimes(2);
+        expect(String(warn.mock.calls[0][0])).toContain('abc');
+    });
+
+    it('a failed delete never fails the save: it reports "failed" and does not throw', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        expect(await dropStaleEmbedding(fakeClient({ data: null, error: { message: 'rls' } }).client, 'abc')).toBe('failed');
+        expect(await dropStaleEmbedding(fakeClient(new Error('offline')).client, 'abc')).toBe('failed');
     });
 });
 
