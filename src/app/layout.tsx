@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
-import AIChat from "@/components/AIChat";
+import ChatAgent from "@/components/ChatAgent";  // OM75: the one chat, on every page
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ClientErrorReporterMount } from "@/components/ClientErrorReporterMount";
 import { ToastProvider } from "@/components/Toast";
@@ -70,7 +70,7 @@ export default function RootLayout({
           <ToastProvider>
             <ClientErrorReporterMount />
             <ErrorBoundary>{children}</ErrorBoundary>
-            <AIChat />
+            <ChatAgent />
           </ToastProvider>
         </AuthProvider>
       </body>

@@ -3,6 +3,7 @@
 import React, { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiFetch } from "@/lib/apiFetch";
+import { embeddingTextChanged, dropStaleEmbedding } from "@/lib/staleEmbedding";  // OM75
 import { Recipe } from "@/lib/types";
 import { CATEGORIES } from "@/lib/constants";
 import { ArrowLeft, ExternalLink, ClipboardList, StickyNote, Pencil, Sparkles, Loader2, AlertTriangle, AlertCircle, X, ChefHat } from "lucide-react";
@@ -107,6 +108,7 @@ function RecipeDetail({ id }: { id: string }) {
     }, [id]);
 
     const handleUpdateRecipe = async (updated: Recipe) => {
+        const before = recipe;  // OM75 — what the stored embedding was made from
         // Optimistic update
         setRecipe(updated);
         setNotes(updated.notes || "");
@@ -147,6 +149,9 @@ function RecipeDetail({ id }: { id: string }) {
             setSaveError("Couldn't save — you may not have permission to edit this recipe.");
             throw new Error("0 rows updated");
         }
+        // OM75 — new title/ingredients/method: drop the old vector so the next Sync re-embeds it.
+        // A notes-only save leaves it alone.
+        if (embeddingTextChanged(before, updated)) await dropStaleEmbedding(supabase, updated.id);
     };
 
     const handleSaveNotes = async () => {

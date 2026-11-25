@@ -20,6 +20,7 @@ import {
     ingredientsToShoppingList,
     instructionsToText,
 } from "@/lib/recipeExtractor";
+import { dropStaleEmbedding } from "@/lib/staleEmbedding";  // OM75
 
 export const runtime = "nodejs"; // we need fetch + JSON parsing on the server, not edge
 
@@ -143,6 +144,12 @@ export async function POST(
             { ok: false, error: "supabase update failed", detail: writeErr.message },
             { status: 500 },
         );
+    }
+
+    // OM75 — new ingredients/method: drop the old vector (as the caller, under RLS) so the next
+    // Sync re-embeds the recipe from the text it has now.
+    if (updates.ingredients !== undefined || updates.instructions !== undefined) {
+        await dropStaleEmbedding(supabase, id);
     }
 
     return NextResponse.json({
